@@ -235,3 +235,13 @@ whole bar showed both texts overlapped mid-transition. The swapping pieces now
 get their own named transitions with a quick out-then-in (80ms out, 120ms in),
 so the bar stays put while its words flip one at a time. Verified frame by
 frame at slowed speed: no two labels share the bar at any moment.
+
+### Finished cards say when they were finished
+
+Completing a card used to look like an edit: the meta line read "edited" for
+every finished card, because completion bumped the same timestamp as a content
+change. The API now stamps `completedAt` the moment a card is done (and clears
+it if the card is reopened), so completed cards read "Done ..." instead, and
+"edited" only appears for true content edits. Existing databases gain the
+column through an additive migration, with already-completed cards backfilled
+from their last update.

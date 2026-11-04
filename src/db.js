@@ -26,6 +26,15 @@ try {
 // Backfill so existing cards keep their creation order in the deck.
 db.exec("UPDATE tasks SET sort_order = CAST(strftime('%s', created_at) AS REAL) WHERE sort_order IS NULL");
 
+// Databases created before completion tracking get the column too.
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN completed_at TEXT');
+} catch (err) {
+  if (!String(err.message).includes('duplicate column')) throw err;
+}
+// Cards already done were completed at their last update.
+db.exec('UPDATE tasks SET completed_at = updated_at WHERE completed = 1 AND completed_at IS NULL');
+
 function rowToTask(row) {
   return {
     id: row.id,
@@ -35,6 +44,7 @@ function rowToTask(row) {
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    completedAt: row.completed_at || null,
   };
 }
 
@@ -63,14 +73,18 @@ function createTask({ title, description }) {
 function updateTask(id, { title, description, completed, sort_order }) {
   const existing = getTask(id);
   if (!existing) return null;
+  const now = new Date().toISOString();
   const next = {
     title: title !== undefined ? title : existing.title,
     description: description !== undefined ? description : existing.description,
     completed: completed !== undefined ? (completed ? 1 : 0) : (existing.completed ? 1 : 0),
     sortOrder: sort_order !== undefined ? sort_order : existing.sortOrder,
+    // Stamp the moment a card is finished; clear it if it is reopened.
+    completedAt: completed === undefined ? existing.completedAt
+      : (completed ? (existing.completed ? existing.completedAt : now) : null),
   };
-  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ? WHERE id = ?')
-    .run(next.title, next.description, next.completed, next.sortOrder, new Date().toISOString(), id);
+  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ? WHERE id = ?')
+    .run(next.title, next.description, next.completed, next.sortOrder, now, next.completedAt, id);
   return getTask(id);
 }
 

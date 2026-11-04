@@ -5,5 +5,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   completed   INTEGER NOT NULL DEFAULT 0,
   sort_order  REAL,
   created_at  TEXT    NOT NULL,
-  updated_at  TEXT    NOT NULL
+  updated_at  TEXT    NOT NULL,
+  completed_at TEXT
 );

@@ -122,7 +122,7 @@ function renderDeck() {
       <span class="card-stamp" aria-hidden="true">done</span>
       <span class="card-stamp stamp-later" aria-hidden="true">later</span>
       <div class="card-foot">
-        <span class="card-meta">Added ${formatDate(task.createdAt)}${task.updatedAt !== task.createdAt ? ` · edited ${formatDate(task.updatedAt)}` : ''}</span>
+        <span class="card-meta">${cardMeta(task)}</span>
         <span class="card-tools">
           <button type="button" class="edit-card" ${i === 0 ? '' : 'tabindex="-1"'}>Edit</button>
           <button type="button" class="delete-card" ${i === 0 ? '' : 'tabindex="-1"'}>Delete</button>
@@ -238,6 +238,15 @@ function updateDeckControls() {
 
 function paintState() { renderDeck(); renderSpread(); renderProgress(); updateDeckControls(); }
 function sortTasks() { state.tasks.sort((a, b) => Number(a.completed) - Number(b.completed) || a.sortOrder - b.sortOrder); }
+
+
+// Meta line: when a card joined, when it was done, and true content edits.
+function cardMeta(task) {
+  const parts = [`Added ${formatDate(task.createdAt)}`];
+  if (task.completed && task.completedAt) parts.push(`Done ${formatDate(task.completedAt)}`);
+  if (task.updatedAt !== task.createdAt && task.updatedAt !== task.completedAt) parts.push(`edited ${formatDate(task.updatedAt)}`);
+  return parts.join(' · ');
+}
 
 function flingOut(card, task, x, y, vx, outcome) {
   if (!card || deckAnimating || state.editingCard || pendingTasks.has(task.id)) return;
@@ -393,7 +402,7 @@ function renderSpread() {
         <p class="task-title">${esc(task.title)}</p>
         ${task.description ? `<p class="task-desc">${esc(task.description)}</p>` : ''}
         <div class="task-foot">
-          <p class="task-meta">Added ${formatDate(task.createdAt)}${task.updatedAt !== task.createdAt ? ` · edited ${formatDate(task.updatedAt)}` : ''}</p>
+          <p class="task-meta">${cardMeta(task)}</p>
           <div class="task-actions">
             <button type="button" class="edit-task">Edit</button>
             <button type="button" class="delete-task">Delete</button>

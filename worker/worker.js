@@ -49,6 +49,7 @@ function rowToTask(row) {
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    completedAt: row.completed_at || null,
   };
 }
 
@@ -111,14 +112,20 @@ async function handleApi(request, env, url) {
       }
       const existing = await getTask(db, id);
       if (!existing) return fail(`Task ${id} not found`, 404);
+      const now = new Date().toISOString();
+      const completedNow = body.completed !== undefined ? body.completed : existing.completed;
+      // Stamp the moment a card is finished; clear it if it is reopened.
+      const completedAt = body.completed === undefined ? existing.completedAt
+        : (body.completed ? (existing.completed ? existing.completedAt : now) : null);
       await db
-        .prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ? WHERE id = ?')
+        .prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ? WHERE id = ?')
         .bind(
           body.title !== undefined ? body.title.trim() : existing.title,
           body.description !== undefined ? body.description.trim() : existing.description,
-          body.completed !== undefined ? (body.completed ? 1 : 0) : (existing.completed ? 1 : 0),
+          completedNow ? 1 : 0,
           body.sort_order !== undefined ? body.sort_order : existing.sortOrder,
-          new Date().toISOString(),
+          now,
+          completedAt,
           id,
         )
         .run();
