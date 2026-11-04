@@ -425,6 +425,7 @@ function renderSpread() {
       'No tasks here yet.';
   }
 
+  const actives = state.tasks.filter((t) => !t.completed);
   filtered.forEach((task, index) => {
     const li = document.createElement('li');
     li.className = 'task' + (task.completed ? ' completed' : '');
@@ -443,7 +444,7 @@ function renderSpread() {
         <div class="task-foot">
           <p class="task-meta">${cardMeta(task)}</p>
           <div class="task-actions">
-            ${task.completed ? '' : `<button type="button" class="drag-task" title="Drag to reshuffle the deck" aria-label="Drag ${esc(task.title)} to reshuffle the deck"><svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="3" cy="2.5" r="1.3"/><circle cx="7" cy="2.5" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11.5" r="1.3"/><circle cx="7" cy="11.5" r="1.3"/></svg></button><button type="button" class="pickup-task" title="Bring this card to the top of the deck">Pick up</button>`}
+            ${task.completed ? '' : `<button type="button" class="drag-task" title="Drag to reshuffle the deck, or focus and use arrow keys" aria-label="Reshuffle ${esc(task.title)}: card ${actives.findIndex((t) => t.id === task.id) + 1} of ${actives.length}. Drag it, or press arrow keys to move it"><svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="3" cy="2.5" r="1.3"/><circle cx="7" cy="2.5" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11.5" r="1.3"/><circle cx="7" cy="11.5" r="1.3"/></svg></button><button type="button" class="pickup-task" title="Bring this card to the top of the deck">Pick up</button>`}
             <button type="button" class="edit-task">Edit</button>
             <button type="button" class="delete-task">Delete</button>
           </div>
@@ -474,6 +475,148 @@ function renderSpread() {
   spreadDealIn = false;
   lastAddedId = null;
 }
+
+/* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
+   reduced motion (reference: Tactile Card Stack, antjanus.com/page-designs/card-stack). */
+/* Loop 13: reshuffle the deck by dragging an active card to a new slot.
+   Pointer-driven (same direct-manipulation model as the deck fling, and
+   testable end to end): the grip starts a drag, a lifted ghost follows the
+   pointer clamped inside the viewport, an indicator marks the slot, and on
+   release the card keeps its identity - only its sort_order moves (midpoint
+   between its new neighbors, so one PUT per drop). The FLIP pass from loop 12
+   glides the other cards around the gap. The grip is also a real button:
+   focus it and use arrow keys to move the card one slot at a time. Handle-only
+   dragging keeps title text selectable. */
+function reorderTask(id, index) {
+  const siblings = state.tasks.filter((t) => !t.completed && t.id !== id);
+  index = Math.max(0, Math.min(index, siblings.length));
+  const prev = siblings[index - 1], next = siblings[index];
+  const newSort = !prev ? (next ? next.sortOrder - 1 : 1)
+    : !next ? prev.sortOrder + 1
+    : (prev.sortOrder + next.sortOrder) / 2;
+  const moved = state.tasks.find((t) => t.id === id);
+  if (!moved || moved.sortOrder === newSort) return Promise.resolve(false);
+  moved.sortOrder = newSort;
+  state.tasks.sort((a, b) => (a.completed - b.completed) || (a.sortOrder - b.sortOrder));
+  renderSpread();
+  return updateTask(id, { sort_order: newSort })
+    .then(() => true)
+    .catch(async (err) => {
+      showToast(err.message, { error: true });
+      await refresh(); // server is the truth: put the card back where it really is
+      return false;
+    });
+}
+
+(() => {
+  const list = $('#task-list');
+  let drag = null; // { id, li, ghost, mark: { li, before } | null }
+
+  const clearMark = () => {
+    if (drag && drag.mark) drag.mark.li.classList.remove('drop-before', 'drop-after');
+    if (drag) drag.mark = null;
+  };
+  const setMark = (li, before) => {
+    if (drag && drag.mark && drag.mark.li === li && drag.mark.before === before) return;
+    clearMark();
+    li.classList.add(before ? 'drop-before' : 'drop-after');
+    drag.mark = { li, before };
+  };
+  const cleanup = () => {
+    if (!drag) return;
+    clearMark();
+    drag.ghost && drag.ghost.remove();
+    drag.li.classList.remove('dragging');
+    drag = null;
+  };
+  // keep the ghost inside the visible viewport; when clamped, the card slides
+  // along the edge instead of following the pointer off-screen
+  const clampedGhostPos = (x, y, w, h) => ({
+    x: Math.max(4, Math.min(x, window.innerWidth - w - 4)),
+    y: Math.max(4, Math.min(y, window.innerHeight - Math.min(h, 80) - 4)),
+  });
+
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-task');
+    if (!handle || e.button > 0) return;
+    e.preventDefault(); // keep the browser from hijacking the gesture (native drag/select -> pointercancel)
+    const li = handle.closest('.task');
+    const sx = e.clientX, sy = e.clientY;
+    const id = Number(li.dataset.id);
+    const startRect = li.getBoundingClientRect();
+
+    const onMove = (ev) => {
+      if (!drag) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        const ghost = li.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.style.width = Math.min(startRect.width, window.innerWidth - 8) + 'px';
+        document.body.appendChild(ghost);
+        li.classList.add('dragging');
+        drag = { id, li, ghost, mark: null, dx: sx - startRect.left, dy: sy - startRect.top };
+      }
+      const gw = drag.ghost.offsetWidth, gh = drag.ghost.offsetHeight;
+      const pos = clampedGhostPos(ev.clientX - drag.dx, ev.clientY - drag.dy, gw, gh);
+      drag.ghost.style.transform = `translate(${pos.x}px, ${pos.y}px) rotate(1.5deg)`;
+      // mark the slot: before the first active card whose center is below the
+      // pointer, after the last active card when dragged past the pile
+      const cards = [...list.querySelectorAll('.task:not(.completed)')].filter((el) => el !== drag.li);
+      const target = cards.find((el) => {
+        const r = el.getBoundingClientRect();
+        return ev.clientY < r.top + r.height / 2;
+      });
+      if (target) setMark(target, true);
+      else if (cards.length) setMark(cards[cards.length - 1], false);
+      else clearMark();
+    };
+
+    const onUp = async () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      if (!drag) return; // plain click on the grip
+      const mark = drag.mark;
+      const idAtDrop = drag.id;
+      cleanup();
+      const siblings = state.tasks.filter((t) => !t.completed && t.id !== idAtDrop);
+      let index = siblings.length;
+      if (mark) {
+        const at = siblings.findIndex((t) => t.id === Number(mark.li.dataset.id));
+        if (at >= 0) index = mark.before ? at : at + 1;
+      }
+      await reorderTask(idAtDrop, index);
+    };
+    const onCancel = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      cleanup();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+  });
+
+  // keyboard reshuffle: focus a grip, arrows move the card one slot per press
+  list.addEventListener('keydown', async (e) => {
+    const handle = e.target.closest('.drag-task');
+    if (!handle) return;
+    const delta = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1
+      : (e.key === 'ArrowDown' || e.key === 'ArrowRight') ? 1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    const id = Number(handle.closest('.task').dataset.id);
+    const actives = state.tasks.filter((t) => !t.completed);
+    const at = actives.findIndex((t) => t.id === id);
+    if (at < 0) return;
+    const target = at + delta;
+    if (target < 0 || target > actives.length - 1) return;
+    await reorderTask(id, target);
+    // renderSpread rebuilt the list: hand focus back to the moved card's grip
+    const again = [...list.querySelectorAll('.task')].find((el) => Number(el.dataset.id) === id);
+    again && again.querySelector('.drag-task').focus();
+  });
+})();
 
 /* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
    reduced motion (reference: Tactile Card Stack, antjanus.com/page-designs/card-stack). */

@@ -142,14 +142,18 @@ entirely in JS rather than only hiding it in CSS.
 
 **Reshuffle the deck by dragging.**
 Active spread cards carry a grip handle: press it and drag the lifted card to a new
-slot (an accent line marks where it will land), on pointer or touch. The card keeps
-its identity - only its `sort_order` moves, set to the midpoint between its new
-neighbors so a reshuffle costs exactly one `PUT /api/tasks/:id`. Dropping between
-rows or past the end lands in the nearest sensible slot, the other cards glide aside
-with the FLIP settle, and dragging by the title text still selects text because only
-the grip starts a drag. This extends the same direct-manipulation model as the deck's
-swipe-to-complete and reuses Koch's principles; the reorder is interruptible and the
-reduced-motion path applies it instantly.
+slot (an accent line marks where it will land), on pointer or touch. The drag ghost
+stays clamped inside the viewport, so it never clips off-screen on a phone. The card
+keeps its identity - only its `sort_order` moves, set to the midpoint between its new
+neighbors so a reshuffle costs exactly one `PUT /api/tasks/:id`; if that save fails,
+the card snaps back to where the server says it lives. Dropping between rows or past
+the end lands in the nearest sensible slot, the other cards glide aside with the FLIP
+settle, and dragging by the title text still selects text because only the grip
+starts a drag. The grip is also a button: keyboard users focus it and move the card
+one slot per arrow-key press, with focus returned to the moved card and its new
+position announced in the label. This extends the same direct-manipulation model as
+the deck's swipe-to-complete and reuses Koch's principles; the reorder is
+interruptible and the reduced-motion path applies it instantly.
 
 ## Deployment (Cloudflare Workers + D1)
 
