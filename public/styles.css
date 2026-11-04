@@ -12,7 +12,7 @@
   --border-bright: #31405a;
   --ink: #edf1f7;
   --muted: #8e9ab0;
-  --faint: #5b6a82;
+  --faint: #7e90a9;
   --accent: #34d399;
   --accent-ink: #052e21;
   --accent-soft: rgba(52, 211, 153, 0.14);
@@ -77,6 +77,7 @@ body {
 /* ---------- Add form ---------- */
 .add-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: stretch;
   background: var(--surface);
@@ -331,8 +332,14 @@ body {
   .header h1 { font-size: 1.65rem; }
   .add-form { flex-direction: column; }
   #add-button { width: 100%; padding: 12px; }
-  .task { padding: 13px 13px; gap: 11px; }
-  .task-actions button { padding: 7px 10px; font-size: 0.8rem; }
+  .task { padding: 13px 13px; gap: 11px; flex-wrap: wrap; }
+  .task-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: -2px;
+    padding-left: 37px; /* aligns with the text column past the checkbox */
+  }
+  .task-actions button { padding: 8px 14px; font-size: 0.85rem; min-height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

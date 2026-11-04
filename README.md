@@ -67,6 +67,31 @@ curl "http://localhost:3000/api/tasks?status=active"
 curl -X DELETE http://localhost:3000/api/tasks/1
 ```
 
+## Design rationale
+
+The UI is a dark, content-first task list built from published design writing on
+task-management interfaces, not arbitrary styling:
+
+- **Neutral palette, color only for meaning** - the interface is near-monochrome with one
+  emerald accent for the primary action and completion, red only for delete. Pattern from
+  Things 3's visual restraint: <https://blakecrosley.com/guides/design/things> and
+  <https://www.tapsmart.com/features/the-classic-app-things/>
+- **Rewarding completion** - the custom circular checkbox fills and draws its check with a
+  small pop, because the check-off moment is the core loop of a task app:
+  <https://blakecrosley.com/guides/design/things>, <https://xavd.id/blog/post/my-perfect-task-app/>
+- **Low visual noise, fast ease-out motion** - hairline borders, one accent, short
+  decelerating transitions, following Linear's redesign notes:
+  <https://linear.app/now/how-we-redesigned-the-linear-ui> and
+  <https://www.figma.com/blog/the-linear-method-opinionated-software/>
+- **Immediate feedback for every action** - toast confirmation on add, edit, complete,
+  reopen and delete, inline validation, and the destructive action in red:
+  <https://ixd.prattsi.org/2024/01/design-critique-todoist-ios-app/>
+- **Progress at a glance** - the header shows a live "X of Y done" count with a thin
+  progress bar; completed tasks sink to the bottom, fade and take a dashed border instead
+  of competing with active work.
+- **Mobile-first** - full-width rows, 44px touch targets, action buttons move to their own
+  row on narrow screens, and reduced-motion users get instant transitions.
+
 ## Project structure
 
 ```
