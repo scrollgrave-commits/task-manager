@@ -191,8 +191,9 @@ function wireTopCard(card, task) {
       return;
     }
     try {
+      const snapshot = { ...task }; // Loop 15: deck deletes get the same undo window as spread deletes
       await deleteTask(task.id);
-      showToast(`Deleted "${task.title}"`);
+      showToast(`Deleted "${task.title}"`, { action: 'Undo', onAction: () => restoreTask(snapshot) });
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
   });
