@@ -1,17 +1,28 @@
-# Task Manager
+# The Deck - Task Manager
 
-A full-stack task list application: add, edit, complete/incomplete and delete tasks
-through a clean responsive web UI, backed by a REST CRUD API and a real SQLite database.
+A full-stack task list application built around a physical metaphor: your tasks are a
+deck of paper index cards on a dark desk. Instead of scanning a list to decide what to
+do, you work the **top card** - finish it or send it to the back - one decision at a
+time. A full management view (the spread) sits one tap away.
+
+Backed by a REST CRUD API and a real SQLite database.
 
 ## Features
 
-- Create tasks with a title and optional description
-- Edit any task's title and description inline
-- Mark tasks complete or incomplete
-- Delete tasks (two-step confirm)
-- Filter by All / Active / Completed with live counts
-- Action feedback: toast messages on every add, edit, toggle and delete, plus error toasts
-- Responsive layout that works on phone and laptop widths
+- **The deck** - active tasks as a stack of index cards; the top card is your focus
+- **Drag the top card**: fling right to complete it, left to send it to the back of the
+  deck - with real spring physics (the card tracks your pointer 1:1, keeps your throw's
+  velocity, and stamps DONE as you commit)
+- **Permanent Done / Later buttons** that do exactly what the gestures do (a drag cannot
+  be made with a keyboard or switch), plus Undo on every completion toast
+- Create cards with a title and optional note ("deal a card")
+- Edit any card's title and note inline - on the deck card or in the spread
+- Delete cards (two-step confirm)
+- Mark tasks complete/incomplete from the spread's check circles too
+- Spread view with All / Active / Completed filters and live counts
+- Progress ring in the header ("X of Y done")
+- Action feedback: toast on every add, edit, complete, reopen and delete, plus error toasts
+- Responsive layout for phone and laptop; honors prefers-reduced-motion
 - Proper API error handling: validation errors (400), not found (404), server errors (500)
 
 ## Tech stack
@@ -42,7 +53,7 @@ Base URL: `http://localhost:3000/api/tasks`
 | GET    | `/`                  | List tasks (`?status=all|active|completed`) | 200 | 400 bad status  |
 | POST   | `/`                  | Create a task `{title, description?}`      | 201 | 400 validation  |
 | GET    | `/:id`               | Get one task                       | 200     | 400, 404        |
-| PUT    | `/:id`               | Edit title/description and/or set `completed` | 200 | 400, 404   |
+| PUT    | `/:id`               | Edit `title`/`description`, set `completed`, and/or set `sort_order` (deck position) | 200 | 400, 404   |
 | DELETE | `/:id`               | Delete a task                      | 204     | 400, 404        |
 
 All responses are JSON. Errors return `{ "error": "message" }`.
@@ -69,28 +80,47 @@ curl -X DELETE http://localhost:3000/api/tasks/1
 
 ## Design rationale
 
-The UI is a dark, content-first task list built from published design writing on
-task-management interfaces, not arbitrary styling:
+The concept and its execution come from published design work on task interfaces,
+swipe-deck patterns and interface motion - each decision below names its source.
 
-- **Neutral palette, color only for meaning** - the interface is near-monochrome with one
-  emerald accent for the primary action and completion, red only for delete. Pattern from
-  Things 3's visual restraint: <https://blakecrosley.com/guides/design/things> and
-  <https://www.tapsmart.com/features/the-classic-app-things/>
-- **Rewarding completion** - the custom circular checkbox fills and draws its check with a
-  small pop, because the check-off moment is the core loop of a task app:
-  <https://blakecrosley.com/guides/design/things>, <https://xavd.id/blog/post/my-perfect-task-app/>
-- **Low visual noise, fast ease-out motion** - hairline borders, one accent, short
-  decelerating transitions, following Linear's redesign notes:
-  <https://linear.app/now/how-we-redesigned-the-linear-ui> and
-  <https://www.figma.com/blog/the-linear-method-opinionated-software/>
-- **Immediate feedback for every action** - toast confirmation on add, edit, complete,
-  reopen and delete, inline validation, and the destructive action in red:
-  <https://ixd.prattsi.org/2024/01/design-critique-todoist-ios-app/>
-- **Progress at a glance** - the header shows a live "X of Y done" count with a thin
-  progress bar; completed tasks sink to the bottom, fade and take a dashed border instead
-  of competing with active work.
-- **Mobile-first** - full-width rows, 44px touch targets, action buttons move to their own
-  row on narrow screens, and reduced-motion users get instant transitions.
+**The concept: a deck, not a list.**
+Doo (iOS) proved a card stack works as a task manager for "the one-track mind": enter
+tasks as cards, handle them one at a time, swipe to complete or snooze
+(<https://www.macstories.net/reviews/doo-review-a-different-take-on-the-task-manager-genre/>).
+The Deck adopts that focus model and fixes its two known weak points using the
+swipe-deck pattern's own usability notes
+(<https://vocab.design/swipe-deck>):
+
+- **Visible buttons for every gesture, permanently** - a drag cannot be performed with a
+  keyboard, switch or voice, so Done and Later sit under the deck at all times and do
+  exactly what the two drag directions do.
+- **Undo for fast decisions** - deck decisions are quick and cheap, so every completion
+  toast carries an Undo that deals the card back to the front.
+- **Send-to-back keeps the card in the deck** (MacStories' reviewer criticised Doo for
+  removing snoozed cards from the stack; here a "later" card rotates to the back and its
+  position is persisted in the database via `sort_order`).
+
+**The motion: real springs, direct manipulation.**
+From Karl Koch's "10 Principles for Fluid UI"
+(<https://karlkoch.me/writing/10-principles-for-fluid-ui/>):
+
+- The card tracks the pointer 1:1 while dragged (principle 3, direct manipulation).
+- Release velocity is preserved into the fling-off animation instead of restarting from
+  zero (principle 4); a slow drag past the threshold and a fast flick both complete, and
+  feel different.
+- Snap-back uses a stiffness/damping spring (300/22, inside Koch's recommended ranges)
+  rather than a fixed-duration ease, and every animation is interruptible (principles 1-2).
+- Under-cards settle with an overshoot spring curve when the stack changes
+  (principle 7, helped users follow layout changes).
+- `prefers-reduced-motion` replaces all of it with instant state changes (principle 10).
+
+**The surface: paper on a dark desk.**
+The palette keeps the restraint praised in Things 3 - near-monochrome chrome, one
+emerald accent reserved for completion and the primary action, red only for destructive
+steps (<https://blakecrosley.com/guides/design/things>,
+<https://www.tapsmart.com/features/the-classic-app-things/>) - while the warm paper card
+with ruled lines makes the deck metaphor literal and keeps ink-on-paper contrast high
+(WCAG AA on every text/background pair).
 
 ## Project structure
 
@@ -113,9 +143,15 @@ task-manager/
 
 ## Screenshots
 
-| Desktop | Mobile |
+| The deck (desktop) | The deck (mobile) |
 | ------- | ------ |
-| ![Desktop view](screenshots/desktop.png) | ![Mobile view](screenshots/mobile.png) |
+| ![Desktop deck view](screenshots/desktop.png) | ![Mobile deck view](screenshots/mobile.png) |
+
+| Dragging a card to done | Spread (management) view |
+| ------- | ------ |
+| ![Mid-drag with DONE stamp](screenshots/deck-mid-drag.png) | ![Spread view](screenshots/spread.png) |
+
+- [Add-card validation error state](screenshots/error-state.png)
 
 API examples:
 

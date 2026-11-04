@@ -29,6 +29,10 @@ function validateTaskInput(body, { partial }) {
     errors.push('completed must be true or false');
   }
 
+  if (body.sort_order !== undefined && (typeof body.sort_order !== 'number' || !Number.isFinite(body.sort_order))) {
+    errors.push('sort_order must be a number');
+  }
+
   return { errors };
 }
 

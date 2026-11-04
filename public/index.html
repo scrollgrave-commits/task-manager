@@ -1,52 +1,86 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0d1017" />
-  <title>Task Manager</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Deck - Task Manager</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="container">
+  <div class="app">
     <header class="header">
-      <p class="eyebrow">Task Manager</p>
-      <div class="header-row">
-        <h1>My Tasks</h1>
-        <p class="progress-label"><span id="progress-label">0 of 0 done</span></p>
+      <div class="header-text">
+        <span class="eyebrow">task manager</span>
+        <h1>The Deck</h1>
+        <p class="date" id="today"></p>
       </div>
-      <p class="date-line" id="date-line"></p>
-      <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress" title="Deck progress">
+        <svg viewBox="0 0 44 44" class="ring" aria-hidden="true">
+          <circle class="ring-track" cx="22" cy="22" r="19" />
+          <circle class="ring-fill" id="ring-fill" cx="22" cy="22" r="19" />
+        </svg>
+        <span class="progress-label" id="progress-label">0 of 0</span>
+      </div>
     </header>
 
+    <main>
+      <!-- Deck view: the top card is your current focus -->
+      <section id="deck-view" aria-label="Task deck">
+        <div class="deck-stage">
+          <div id="deck" aria-live="polite"></div>
+          <div id="deck-empty" class="deck-empty" hidden>
+            <div class="deck-empty-card">
+              <span class="deck-empty-mark" aria-hidden="true">✓</span>
+              <p class="deck-empty-title" id="deck-empty-title">Deck cleared</p>
+              <p class="deck-empty-sub" id="deck-empty-sub">Every card is done. Deal a new one below.</p>
+            </div>
+          </div>
+        </div>
+        <div class="deck-controls" id="deck-controls">
+          <button type="button" id="later-button" class="btn-later" title="Send this card to the back of the deck">
+            <span aria-hidden="true">↺</span> Later
+          </button>
+          <p class="deck-hint">drag right to finish · left to send back</p>
+          <button type="button" id="done-button" class="btn-done" title="Complete this card">
+            <span aria-hidden="true">✓</span> Done
+          </button>
+        </div>
+      </section>
+
+      <!-- Spread view: full management list -->
+      <section id="spread-view" aria-label="All tasks" hidden>
+        <div class="filters" role="tablist" aria-label="Filter tasks">
+          <button type="button" class="filter is-active" data-filter="all" role="tab" aria-selected="true">All <span class="count" id="count-all">0</span></button>
+          <button type="button" class="filter" data-filter="active" role="tab" aria-selected="false">Active <span class="count" id="count-active">0</span></button>
+          <button type="button" class="filter" data-filter="completed" role="tab" aria-selected="false">Completed <span class="count" id="count-completed">0</span></button>
+        </div>
+        <ul id="task-list" class="task-list"></ul>
+        <p id="list-empty" class="list-empty" hidden>No tasks here yet.</p>
+      </section>
+    </main>
+
+    <button type="button" id="view-toggle" class="view-toggle" aria-pressed="false">
+      <span id="view-toggle-label">Spread view</span>
+    </button>
+
+    <!-- Deal a new card -->
     <form id="add-form" class="add-form" novalidate>
-      <div class="add-inputs">
-        <input id="new-title" type="text" placeholder="What needs to be done?" maxlength="200" required />
-        <input id="new-description" type="text" placeholder="Add a note (optional)" maxlength="1000" />
+      <div class="add-slip">
+        <div class="add-inputs">
+          <input id="new-title" type="text" placeholder="Write a new card..." autocomplete="off" maxlength="200" aria-label="Task title" />
+          <input id="new-note" type="text" placeholder="Add a note (optional)" autocomplete="off" maxlength="500" aria-label="Task note" />
+        </div>
+        <button type="submit" id="add-button"><span aria-hidden="true">＋</span> Deal card</button>
       </div>
-      <button id="add-button" type="submit" aria-label="Add task">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        <span>Add task</span>
-      </button>
-      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <p id="form-error" class="form-error" hidden></p>
     </form>
+  </div>
 
-    <nav class="filters" aria-label="Task filters">
-      <button class="filter active" data-status="all">All <span class="count" id="count-all">0</span></button>
-      <button class="filter" data-status="active">Active <span class="count" id="count-active">0</span></button>
-      <button class="filter" data-status="completed">Completed <span class="count" id="count-completed">0</span></button>
-    </nav>
-
-    <section id="task-list" class="task-list" aria-live="polite"></section>
-
-    <div id="empty-state" class="empty-state" hidden>
-      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.2 2.4 2.4 4.6-4.8"/></svg>
-      <p class="empty-title">All clear</p>
-      <p class="empty-sub">Add your first task above to get started.</p>
-    </div>
-  </main>
-
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="toast" class="toast" hidden>
+    <span class="toast-dot" aria-hidden="true"></span>
+    <span id="toast-message"></span>
+    <button type="button" id="toast-action" class="toast-action" hidden>Undo</button>
+  </div>
 
   <script src="app.js"></script>
 </body>

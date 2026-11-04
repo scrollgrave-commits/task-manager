@@ -11,10 +11,20 @@ db.exec(`
     title       TEXT    NOT NULL,
     description TEXT    NOT NULL DEFAULT '',
     completed   INTEGER NOT NULL DEFAULT 0,
+    sort_order  REAL,
     created_at  TEXT    NOT NULL,
     updated_at  TEXT    NOT NULL
   )
 `);
+
+// Databases created before the deck feature get the column too.
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN sort_order REAL');
+} catch (err) {
+  if (!String(err.message).includes('duplicate column')) throw err;
+}
+// Backfill so existing cards keep their creation order in the deck.
+db.exec("UPDATE tasks SET sort_order = CAST(strftime('%s', created_at) AS REAL) WHERE sort_order IS NULL");
 
 function rowToTask(row) {
   return {
@@ -22,6 +32,7 @@ function rowToTask(row) {
     title: row.title,
     description: row.description,
     completed: row.completed === 1,
+    sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -32,7 +43,7 @@ function listTasks(status) {
   const params = [];
   if (status === 'active') sql += ' WHERE completed = 0';
   if (status === 'completed') sql += ' WHERE completed = 1';
-  sql += ' ORDER BY completed ASC, created_at DESC';
+  sql += ' ORDER BY completed ASC, sort_order ASC';
   return db.prepare(sql).all(...params).map(rowToTask);
 }
 
@@ -44,21 +55,22 @@ function getTask(id) {
 function createTask({ title, description }) {
   const now = new Date().toISOString();
   const result = db
-    .prepare('INSERT INTO tasks (title, description, created_at, updated_at) VALUES (?, ?, ?, ?)')
-    .run(title, description ?? '', now, now);
+    .prepare('INSERT INTO tasks (title, description, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .run(title, description ?? '', Date.now(), now, now);
   return getTask(Number(result.lastInsertRowid));
 }
 
-function updateTask(id, { title, description, completed }) {
+function updateTask(id, { title, description, completed, sort_order }) {
   const existing = getTask(id);
   if (!existing) return null;
   const next = {
     title: title !== undefined ? title : existing.title,
     description: description !== undefined ? description : existing.description,
     completed: completed !== undefined ? (completed ? 1 : 0) : (existing.completed ? 1 : 0),
+    sortOrder: sort_order !== undefined ? sort_order : existing.sortOrder,
   };
-  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, updated_at = ? WHERE id = ?')
-    .run(next.title, next.description, next.completed, new Date().toISOString(), id);
+  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ? WHERE id = ?')
+    .run(next.title, next.description, next.completed, next.sortOrder, new Date().toISOString(), id);
   return getTask(id);
 }
 

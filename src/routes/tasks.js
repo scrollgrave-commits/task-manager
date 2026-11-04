@@ -44,14 +44,15 @@ router.put('/:id', (req, res) => {
   const body = req.body || {};
   const { errors } = validateTaskInput(body, { partial: true });
   if (errors.length > 0) return res.status(400).json({ error: errors.join('; ') });
-  if (body.title === undefined && body.description === undefined && body.completed === undefined) {
-    return res.status(400).json({ error: 'provide at least one of: title, description, completed' });
+  if (body.title === undefined && body.description === undefined && body.completed === undefined && body.sort_order === undefined) {
+    return res.status(400).json({ error: 'provide at least one of: title, description, completed, sort_order' });
   }
 
   const updates = {};
   if (body.title !== undefined) updates.title = body.title.trim();
   if (body.description !== undefined) updates.description = body.description.trim();
   if (body.completed !== undefined) updates.completed = body.completed;
+  if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
 
   const task = db.updateTask(id, updates);
   if (!task) return res.status(404).json({ error: `Task ${id} not found` });
