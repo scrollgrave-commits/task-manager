@@ -393,6 +393,13 @@ function openCardEdit(card, task) {
 /* ---------- spread view ---------- */
 function renderSpread() {
   const list = $('#task-list');
+  // Loop 12: FLIP - remember where each visible card sits before the re-render,
+  // so surviving cards can glide to their new spot instead of jumping
+  // (reference: motion-flip-expand, webdevpuneet.com/ui-snippets/motion-flip-expand).
+  const prevRects = new Map();
+  if (!reduceMotion && !spreadDealIn) {
+    list.querySelectorAll('.task').forEach((li) => prevRects.set(li.dataset.id, li.getBoundingClientRect()));
+  }
   const filtered = state.tasks.filter((t) =>
     state.filter === 'all' ? true : state.filter === 'active' ? !t.completed : t.completed);
 
@@ -446,6 +453,24 @@ function renderSpread() {
     if (pendingTasks.has(task.id)) li.querySelectorAll('button').forEach(b => b.disabled = true);
     list.appendChild(li);
   });
+  // Loop 12 (play): shift each surviving card back to its old spot, then release
+  // it to the stylesheet transition so it settles into place.
+  if (prevRects.size) {
+    list.querySelectorAll('.task').forEach((li) => {
+      const old = prevRects.get(li.dataset.id);
+      if (!old || li.classList.contains('deal-in')) return;
+      const now = li.getBoundingClientRect();
+      const dx = old.left - now.left, dy = old.top - now.top;
+      if (!dx && !dy) return;
+      li.style.transition = 'none';
+      li.style.transform = `translate(${dx}px, ${dy}px)`;
+      li.getBoundingClientRect(); // commit the offset before releasing it
+      li.classList.add('flip-moving');
+      li.style.transition = '';
+      li.style.transform = '';
+      li.addEventListener('transitionend', () => li.classList.remove('flip-moving'), { once: true });
+    });
+  }
   spreadDealIn = false;
   lastAddedId = null;
 }

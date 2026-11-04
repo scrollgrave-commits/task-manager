@@ -129,6 +129,17 @@ steps (<https://blakecrosley.com/guides/design/things>,
 with ruled lines makes the deck metaphor literal and keeps ink-on-paper contrast high
 (WCAG AA on every text/background pair).
 
+**The spread settles instead of jumping.**
+When a card changes state in the spread - completed, reopened, restored from the
+undo toast - the other cards glide from their old positions to their new ones with a
+FLIP (First, Last, Invert, Play) pass instead of an instant re-layout
+(<https://webdevpuneet.com/ui-snippets/motion-flip-expand>). The re-render itself stays
+a plain DOM rebuild; each surviving card is shifted back to its previous rect and
+released into a 320ms spring-curve transition, so the code stays simple while the desk
+keeps its spatial continuity. Freshly dealt cards keep their own deal-in animation,
+filter and view changes are untouched, and `prefers-reduced-motion` skips the effect
+entirely in JS rather than only hiding it in CSS.
+
 ## Deployment (Cloudflare Workers + D1)
 
 The app also ships a Workers port in `worker/` (same REST contract as `server.js`, D1 instead of the local SQLite file).
