@@ -443,7 +443,7 @@ function renderSpread() {
         <div class="task-foot">
           <p class="task-meta">${cardMeta(task)}</p>
           <div class="task-actions">
-            ${task.completed ? '' : '<button type="button" class="pickup-task" title="Bring this card to the top of the deck">Pick up</button>'}
+            ${task.completed ? '' : `<button type="button" class="drag-task" title="Drag to reshuffle the deck" aria-label="Drag ${esc(task.title)} to reshuffle the deck"><svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="3" cy="2.5" r="1.3"/><circle cx="7" cy="2.5" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11.5" r="1.3"/><circle cx="7" cy="11.5" r="1.3"/></svg></button><button type="button" class="pickup-task" title="Bring this card to the top of the deck">Pick up</button>`}
             <button type="button" class="edit-task">Edit</button>
             <button type="button" class="delete-task">Delete</button>
           </div>
@@ -477,6 +477,197 @@ function renderSpread() {
 
 /* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
    reduced motion (reference: Tactile Card Stack, antjanus.com/page-designs/card-stack). */
+/* Loop 13: reshuffle the deck by dragging an active card to a new slot.
+   Pointer-driven (same direct-manipulation model as the deck fling, and
+   testable end to end): the grip starts a drag, a lifted ghost follows the
+   pointer, an indicator marks the slot, and on release the card keeps its
+   identity - only its sort_order moves (midpoint between its new neighbors,
+   so one PUT per drop). The FLIP pass from loop 12 glides the other cards
+   around the gap. Handle-only dragging keeps text selectable. */
+(() => {
+  const list = $('#task-list');
+  let drag = null; // { id, li, ghost, mark: { li, before } | null }
+
+  const clearMark = () => {
+    if (drag && drag.mark) drag.mark.li.classList.remove('drop-before', 'drop-after');
+    if (drag) drag.mark = null;
+  };
+  const setMark = (li, before) => {
+    if (drag && drag.mark && drag.mark.li === li && drag.mark.before === before) return;
+    clearMark();
+    li.classList.add(before ? 'drop-before' : 'drop-after');
+    drag.mark = { li, before };
+  };
+  const cleanup = () => {
+    if (!drag) return;
+    clearMark();
+    drag.ghost && drag.ghost.remove();
+    drag.li.classList.remove('dragging');
+    drag = null;
+  };
+
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-task');
+    if (!handle || e.button > 0) return;
+    e.preventDefault(); // keep the browser from hijacking the gesture (native drag/select -> pointercancel)
+    const li = handle.closest('.task');
+    const sx = e.clientX, sy = e.clientY;
+    const id = Number(li.dataset.id);
+    const startRect = li.getBoundingClientRect();
+
+    const onMove = (ev) => {
+      if (!drag) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        const ghost = li.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.style.width = startRect.width + 'px';
+        document.body.appendChild(ghost);
+        li.classList.add('dragging');
+        drag = { id, li, ghost, mark: null, dx: sx - startRect.left, dy: sy - startRect.top };
+      }
+      drag.ghost.style.transform = `translate(${ev.clientX - drag.dx}px, ${ev.clientY - drag.dy}px) rotate(1.5deg)`;
+      // mark the slot: before the first active card whose center is below the
+      // pointer, after the last active card when dragged past the pile
+      const cards = [...list.querySelectorAll('.task:not(.completed)')].filter((el) => el !== drag.li);
+      const target = cards.find((el) => {
+        const r = el.getBoundingClientRect();
+        return ev.clientY < r.top + r.height / 2;
+      });
+      if (target) setMark(target, true);
+      else if (cards.length) setMark(cards[cards.length - 1], false);
+      else clearMark();
+    };
+
+    const onUp = async (ev) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      if (!drag) return; // plain click on the grip
+      const mark = drag.mark;
+      const idAtDrop = drag.id;
+      cleanup();
+      const siblings = state.tasks.filter((t) => !t.completed && t.id !== idAtDrop);
+      let index = siblings.length;
+      if (mark) {
+        const at = siblings.findIndex((t) => t.id === Number(mark.li.dataset.id));
+        if (at >= 0) index = mark.before ? at : at + 1;
+      }
+      const prev = siblings[index - 1], next = siblings[index];
+      const newSort = !prev ? (next ? next.sortOrder - 1 : 1)
+        : !next ? prev.sortOrder + 1
+        : (prev.sortOrder + next.sortOrder) / 2;
+      const moved = state.tasks.find((t) => t.id === idAtDrop);
+      if (!moved || moved.sortOrder === newSort) return;
+      moved.sortOrder = newSort;
+      state.tasks.sort((a, b) => (a.completed - b.completed) || (a.sortOrder - b.sortOrder));
+      renderSpread();
+      try {
+        await updateTask(idAtDrop, { sort_order: newSort });
+      } catch (err) {
+        showToast(err.message, { error: true });
+        await refresh();
+      }
+    };
+    const onCancel = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      cleanup();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+  });
+})();
+
+/* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
+   reduced motion (reference: Tactile Card Stack, antjanus.com/page-designs/card-stack). */
+/* Loop 13: reshuffle the deck by dragging an active card to a new slot.
+   The card keeps its exact identity; only its sort_order moves (midpoint between
+   its new neighbors, so one PUT per drop). The FLIP pass from loop 12 then glides
+   the other cards around the gap. Handle-only dragging keeps text selectable. */
+(() => {
+  const list = $('#task-list');
+  let dragId = null;
+  let dropMark = null; // { li, before: bool }
+
+  const clearMark = () => {
+    if (dropMark) dropMark.li.classList.remove('drop-before', 'drop-after');
+    dropMark = null;
+  };
+  const activeCards = () => state.tasks.filter((t) => !t.completed);
+
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-task');
+    if (handle) handle.closest('.task').draggable = true;
+  });
+  list.addEventListener('pointerup', () => {
+    list.querySelectorAll('.task[draggable="true"]').forEach((li) => { if (!dragId) li.draggable = false; });
+  });
+
+  list.addEventListener('dragstart', (e) => {
+    const li = e.target.closest('.task');
+    if (!li) return;
+    dragId = Number(li.dataset.id);
+    li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', ''); } catch {}
+  });
+
+  list.addEventListener('dragover', (e) => {
+    if (dragId === null) return;
+    // Accept the drop anywhere over the list: a drop in a gap between cards
+    // still lands at the last marked slot instead of being canceled.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const li = e.target.closest('.task');
+    if (!li) return;                              // gap: keep the last mark
+    if (Number(li.dataset.id) === dragId) return; // passing over itself: keep
+    if (li.classList.contains('completed')) { clearMark(); return; } // past the pile: drop at the end
+    const r = li.getBoundingClientRect();
+    const before = (e.clientY - r.top) < r.height / 2;
+    if (!dropMark || dropMark.li !== li || dropMark.before !== before) {
+      clearMark();
+      li.classList.add(before ? 'drop-before' : 'drop-after');
+      dropMark = { li, before };
+    }
+  });
+
+  list.addEventListener('drop', async (e) => {
+    if (dragId === null) return;
+    e.preventDefault();
+    const id = dragId;
+    const mark = dropMark;
+    const siblings = activeCards().filter((t) => t.id !== id);
+    let index = siblings.length; // default: drop past the last active card
+    if (mark) {
+      const at = siblings.findIndex((t) => t.id === Number(mark.li.dataset.id));
+      if (at >= 0) index = mark.before ? at : at + 1;
+    }
+    const prev = siblings[index - 1], next = siblings[index];
+    const newSort = !prev ? (next ? next.sortOrder - 1 : 1)
+      : !next ? prev.sortOrder + 1
+      : (prev.sortOrder + next.sortOrder) / 2;
+    const moved = state.tasks.find((t) => t.id === id);
+    if (!moved || moved.sortOrder === newSort) return;
+    moved.sortOrder = newSort;
+    state.tasks.sort((a, b) => (a.completed - b.completed) || (a.sortOrder - b.sortOrder));
+    renderSpread();
+    try {
+      await updateTask(id, { sort_order: newSort });
+    } catch (err) {
+      showToast(err.message, { error: true });
+      await refresh();
+    }
+  });
+
+  list.addEventListener('dragend', () => {
+    dragId = null;
+    clearMark();
+    list.querySelectorAll('.task').forEach((li) => { li.classList.remove('dragging'); li.draggable = false; });
+  });
+})();
+
 if (finePointer && !reduceMotion) {
   const list = $('#task-list');
   list.addEventListener('pointermove', (e) => {

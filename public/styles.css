@@ -581,3 +581,49 @@ body { overflow-x: hidden; }
   z-index: 5;
   transition: transform 320ms cubic-bezier(.22, 1.2, .36, 1);
 }
+
+/* Loop 13: reshuffle affordance - grip handle on active spread cards, drop
+   indicator lines, and a lifted dragging card. Touch users keep Pick up;
+   HTML5 drag is pointer-driven. */
+#task-list .drag-task {
+  cursor: grab;
+  padding: 4px 6px;
+}
+#task-list .drag-task svg {
+  width: 10px;
+  height: 14px;
+  fill: currentColor;
+  display: block;
+}
+#task-list .drag-task:active { cursor: grabbing; }
+#task-list .task.dragging {
+  opacity: 0.55;
+  z-index: 6;
+}
+#task-list .task.drop-before,
+#task-list .task.drop-after { position: relative; }
+#task-list .task.drop-before::before,
+#task-list .task.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent, #34d399);
+  pointer-events: none;
+}
+#task-list .task.drop-before::before { top: -6px; }
+#task-list .task.drop-after::after { bottom: -6px; }
+#task-list .drag-task { touch-action: none; }
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  margin: 0;
+  z-index: 60;
+  pointer-events: none;
+  list-style: none;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+#task-list .drag-task, #task-list .drag-task * { -webkit-user-drag: none; user-select: none; }
