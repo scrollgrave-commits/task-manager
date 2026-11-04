@@ -9,6 +9,10 @@ const formError = document.getElementById('form-error');
 let currentStatus = 'all';
 let toastTimer = null;
 
+document.getElementById('date-line').textContent = new Date().toLocaleDateString(undefined, {
+  weekday: 'long', day: 'numeric', month: 'long',
+});
+
 function showToast(message, isError = false) {
   toast.textContent = message;
   toast.classList.toggle('error', isError);
@@ -44,6 +48,12 @@ async function refresh() {
     document.getElementById('count-all').textContent = all.length;
     document.getElementById('count-active').textContent = active.length;
     document.getElementById('count-completed').textContent = completed.length;
+
+    const done = completed.length;
+    const total = all.length;
+    document.getElementById('progress-label').textContent = `${done} of ${total} done`;
+    document.getElementById('progress-fill').style.width = total === 0 ? '0%' : `${Math.round((done / total) * 100)}%`;
+
     render(currentStatus === 'active' ? active : currentStatus === 'completed' ? completed : all);
   } catch (err) {
     showToast(`Could not load tasks: ${err.message}`, true);
@@ -53,6 +63,10 @@ async function refresh() {
 function render(tasks) {
   taskList.innerHTML = '';
   emptyState.hidden = tasks.length > 0;
+  if (tasks.length > 0) {
+    emptyState.querySelector('.empty-title').textContent = 'All clear';
+    emptyState.querySelector('.empty-sub').textContent = 'Add your first task above to get started.';
+  }
   tasks.forEach((task) => taskList.appendChild(buildTaskElement(task)));
 }
 
@@ -61,19 +75,22 @@ function buildTaskElement(task) {
   li.className = `task${task.completed ? ' completed' : ''}`;
   li.dataset.id = task.id;
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.className = 'task-check';
-  checkbox.checked = task.completed;
-  checkbox.setAttribute('aria-label', `Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`);
-  checkbox.addEventListener('change', async () => {
+  const check = document.createElement('button');
+  check.type = 'button';
+  check.className = 'task-check';
+  check.setAttribute('role', 'checkbox');
+  check.setAttribute('aria-checked', String(task.completed));
+  check.setAttribute('aria-label', `Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`);
+  check.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  check.addEventListener('click', async () => {
+    const next = check.getAttribute('aria-checked') !== 'true';
     li.classList.add('busy');
     try {
       await api(`/api/tasks/${task.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ completed: checkbox.checked }),
+        body: JSON.stringify({ completed: next }),
       });
-      showToast(checkbox.checked ? `Completed "${task.title}"` : `Reopened "${task.title}"`);
+      showToast(next ? `Completed "${task.title}"` : `Reopened "${task.title}"`);
       await refresh();
     } catch (err) {
       showToast(err.message, true);
@@ -134,7 +151,7 @@ function buildTaskElement(task) {
   actions.appendChild(editBtn);
   actions.appendChild(deleteBtn);
 
-  li.appendChild(checkbox);
+  li.appendChild(check);
   li.appendChild(body);
   li.appendChild(actions);
   return li;
@@ -154,7 +171,7 @@ function startEdit(li, task) {
   const descInput = document.createElement('input');
   descInput.value = task.description;
   descInput.maxLength = 1000;
-  descInput.placeholder = 'Description (optional)';
+  descInput.placeholder = 'Add a note (optional)';
 
   const editActions = document.createElement('div');
   editActions.className = 'edit-actions';
@@ -213,6 +230,8 @@ addForm.addEventListener('submit', async (event) => {
     const task = await api('/api/tasks', { method: 'POST', body: JSON.stringify({ title, description }) });
     showToast(`Added "${task.title}"`);
     addForm.reset();
+    formError.hidden = true;
+    document.getElementById('new-title').focus();
     await refresh();
   } catch (err) {
     showToast(err.message, true);
@@ -220,6 +239,8 @@ addForm.addEventListener('submit', async (event) => {
     addButton.disabled = false;
   }
 });
+
+document.getElementById('new-title').addEventListener('input', () => { formError.hidden = true; });
 
 document.querySelectorAll('.filter').forEach((btn) => {
   btn.addEventListener('click', () => {
