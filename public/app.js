@@ -192,7 +192,7 @@ function wireTopCard(card, task) {
     // snap back with a spring from the current offset
     card.classList.add('is-settling');
     card._spring = springTo({
-      from: x, to: 0, velocity: vx * 1000 / 60, stiffness: 300, damping: 22,
+      from: x, to: 0, velocity: vx * 1000, stiffness: 300, damping: 22,
       onUpdate: (cx) => {
         const cy = y * (1 - Math.min(Math.abs(x - cx) / (Math.abs(x) || 1), 1));
         card.style.transform = `translate(${cx}px, ${reduceMotion ? 0 : cy}px) rotate(${cx / 18}deg)`;

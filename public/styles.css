@@ -395,3 +395,7 @@ body { padding-top: 32px; }
  .add-form { margin-top: 20px; }
  .view-toggle { margin-top: 16px; }
 }
+/* Clip the fling at the viewport root too. Mobile visual viewports must not zoom out. */
+html { overflow-x: hidden; }
+body { overflow-x: hidden; }
+#deck-view { overflow-x: clip; }
