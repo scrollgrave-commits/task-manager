@@ -11,6 +11,8 @@ const state = {
 
 const pendingTasks = new Map();
 let deckAnimating = false;
+let spreadDealIn = false;   // deal the spread in only when the view or filter changes
+let lastAddedId = null;      // a freshly dealt card animates on its own
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- API ---------- */
@@ -365,10 +367,12 @@ function renderSpread() {
   list.innerHTML = '';
   $('#list-empty').hidden = filtered.length > 0;
 
-  filtered.forEach((task) => {
+  filtered.forEach((task, index) => {
     const li = document.createElement('li');
     li.className = 'task' + (task.completed ? ' completed' : '');
     li.dataset.id = task.id;
+    li.style.setProperty('--i', Math.min(index, 14));
+    if (spreadDealIn || task.id === lastAddedId) li.classList.add('deal-in');
     li.innerHTML = `
       <button type="button" class="task-check" aria-label="${task.completed ? 'Mark incomplete' : 'Mark complete'}" aria-pressed="${task.completed}">
         <svg viewBox="0 0 16 16"><path d="M2.5 8.5l3.5 3.5 7-8"/></svg>
@@ -376,15 +380,20 @@ function renderSpread() {
       <div class="task-body">
         <p class="task-title">${esc(task.title)}</p>
         ${task.description ? `<p class="task-desc">${esc(task.description)}</p>` : ''}
-        <p class="task-meta">Added ${formatDate(task.createdAt)}${task.updatedAt !== task.createdAt ? ` · edited ${formatDate(task.updatedAt)}` : ''}</p>
+        <div class="task-foot">
+          <p class="task-meta">Added ${formatDate(task.createdAt)}${task.updatedAt !== task.createdAt ? ` · edited ${formatDate(task.updatedAt)}` : ''}</p>
+          <div class="task-actions">
+            <button type="button" class="edit-task">Edit</button>
+            <button type="button" class="delete-task">Delete</button>
+          </div>
+        </div>
       </div>
-      <div class="task-actions">
-        <button type="button" class="edit-task">Edit</button>
-        <button type="button" class="delete-task">Delete</button>
-      </div>`;
+      ${task.completed ? '<span class="spread-stamp" aria-hidden="true">done</span>' : ''}`;
     if (pendingTasks.has(task.id)) li.querySelectorAll('button').forEach(b => b.disabled = true);
     list.appendChild(li);
   });
+  spreadDealIn = false;
+  lastAddedId = null;
 }
 
 $('#task-list').addEventListener('click', async (e) => {
@@ -456,7 +465,7 @@ $('#task-list').addEventListener('click', async (e) => {
 });
 
 document.querySelectorAll('.filter').forEach((b) =>
-  b.addEventListener('click', () => { state.filter = b.dataset.filter; renderSpread(); }));
+  b.addEventListener('click', () => { state.filter = b.dataset.filter; spreadDealIn = true; renderSpread(); }));
 
 /* ---------- view toggle ---------- */
 $('#view-toggle').addEventListener('click', () => {
@@ -468,6 +477,7 @@ function applyView() {
   const spread = state.view === 'spread';
   $('#deck-view').hidden = spread;
   $('#spread-view').hidden = !spread;
+  if (spread) { spreadDealIn = true; renderSpread(); }
   $('#view-toggle-label').textContent = spread ? 'Focus deck' : 'Spread view';
   $('#workspace-label').textContent = spread ? 'All your cards' : 'Focus deck';
   $('#view-toggle').setAttribute('aria-pressed', spread);
@@ -489,6 +499,7 @@ $('#add-form').addEventListener('submit', async (e) => {
   errEl.hidden = true;
   try {
     const task = await createTask(title, noteEl.value.trim());
+    lastAddedId = task.id;
     titleEl.value = ''; noteEl.value = '';
     showToast(`Dealt "${task.title}"`);
     await refresh();

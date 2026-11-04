@@ -201,3 +201,15 @@ controls. During a horizontal drag, the underlying cards move forward in proport
 to the drag distance and settle back on cancellation. The view switch crossfades
 when the browser supports View Transitions, with an immediate fallback and reduced-
 motion support. Saves and card handoff keep the same non-blocking path.
+
+### The spread becomes a real spread
+
+The management view now lays tasks out as paper mini-cards on the desk instead of
+generic list rows, keeping the deck metaphor in both views. Cards alternate a
+slight desk-drop rotation and lift flat on hover. Completed cards dim, tilt and
+carry a small DONE stamp rather than a struck-through list row. Entering the
+spread or changing a filter deals the cards in with a staggered spring entrance;
+a card created while the spread is open deals itself in on its own. Editing and
+the two-step delete stay on each card, and the check circle still completes or
+reopens a task. All of it honors prefers-reduced-motion, and the API and deck
+handoff path are untouched.
