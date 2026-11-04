@@ -178,3 +178,16 @@ API examples:
 - [Write operations: create (201), update (200), invalid type (400)](screenshots/api-create.png)
 - [List active tasks (200)](screenshots/api-list.png)
 - [Error handling: validation, not found, malformed JSON (400/404)](screenshots/api-errors.png)
+
+### Interaction refinement
+
+Done and Later update the local deck immediately and save in parallel with a 230ms exit.
+The next card moves forward without a follow-up list fetch. Writes are locked per task;
+rapid double clicks cannot submit the same card twice. A saving indicator distinguishes
+pending changes from confirmed saves. Failed writes restore the card, show an error,
+and reconcile with the server. Undo failures are caught and reported. Drag and snap-back
+transforms no longer compete with a CSS transition. Reduced motion skips the exit.
+Desktop arrow keys also operate the deck when focus is outside a form or button.
+
+The compact responsive layout keeps the paper-card deck and separates the composer
+from the active card. API routes and the SQLite/D1 schema are unchanged.

@@ -344,3 +344,54 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A transform is driven by exactly one animator: pointer, spring, or WAAPI. */
+.card.is-settling, .card.is-leaving { transition: none; }
+.card.is-leaving { pointer-events: none; }
+.sync-status { color: var(--faint); font-size: .75rem; min-height: 18px; margin: -12px 0 16px; }
+.sync-status.is-saving { color: var(--accent); }
+button:disabled { cursor: wait; opacity: .6; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+body { overflow-x: clip; }
+
+/* Refinement pass: compact desk, clear hierarchy, connected controls. */
+body { padding-top: 32px; }
+.app { max-width: 680px; }
+.header { align-items: center; margin-bottom: 24px; }
+.header h1 { font-size: 2.55rem; letter-spacing: -.05em; }
+.eyebrow { letter-spacing: .16em; font-size: .64rem; }
+.deck-stage { height: 342px; margin-bottom: 4px; }
+.card { max-width: 480px; height: 292px; border-radius: 18px; }
+.card-index { font-size: .65rem; letter-spacing: .13em; }
+.card-title { font-size: 1.85rem; letter-spacing: -.035em; }
+.card-foot { gap: 12px; padding-top: 12px; }
+.card-meta { font-size: .68rem; line-height: 1.5; font-weight: 500; }
+.card-tools button { min-height: 36px; }
+.deck-controls { max-width: 480px; margin: 0 auto; }
+.view-toggle { margin-top: 18px; }
+.add-form { margin-top: 24px; }
+.add-slip { background: #141c26; border: 1px solid var(--border); box-shadow: none; transform: none; border-radius: 16px; padding: 14px; }
+.add-inputs { gap: 4px; }
+.add-inputs input { background: transparent; border-color: transparent; color: var(--text); padding: 9px 10px; }
+.add-inputs input::placeholder { color: var(--muted); }
+.add-inputs input:focus { background: var(--bg); box-shadow: none; border-color: var(--accent); }
+#new-note { font-size: .85rem; }
+#add-button { align-self: center; border-radius: 11px; font-size: .85rem; padding: 12px 16px; }
+.toast { border-radius: 16px; max-width: min(480px, calc(100vw - 32px)); font-size: .82rem; line-height: 1.4; }
+.task { animation: none; }
+@media (max-width: 560px) {
+ body { padding: 24px 18px 32px; }
+ .header h1 { font-size: 2.1rem; }
+ .date { font-size: .82rem; }
+ .deck-stage { height: 320px; }
+ .card { height: 278px; padding: 22px 20px 16px; }
+ .card-title { font-size: 1.5rem; }
+ .card-note { font-size: .93rem; }
+ .card-foot { flex-wrap: nowrap; }
+ .card-tools button { padding: 6px 9px; }
+ .deck-controls { gap: 12px; }
+ .add-inputs { flex-basis: 100%; }
+ #add-button { width: 100%; }
+ .add-form { margin-top: 20px; }
+ .view-toggle { margin-top: 16px; }
+}

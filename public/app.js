@@ -9,11 +9,14 @@ const state = {
   editingCard: false,
 };
 
+const pendingTasks = new Map();
+let deckAnimating = false;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- API ---------- */
 async function api(path, options = {}) {
   const res = await fetch(path, {
+    signal: AbortSignal.timeout(12000),
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -82,7 +85,9 @@ function deckTransform(i) {
 function renderDeck() {
   const deck = $('#deck');
   const active = activeTasks();
-  deck.innerHTML = '';
+  const existing = new Map([...deck.children].filter(c => !c.classList.contains('is-leaving')).map(c => [Number(c.dataset.id), c]));
+  const keep = new Set(active.slice(0, VISIBLE).map(t => t.id));
+  for (const [id, card] of existing) if (!keep.has(id)) card.remove();
 
   $('#deck-empty').hidden = active.length > 0;
   $('#deck-controls').hidden = active.length === 0;
@@ -92,16 +97,18 @@ function renderDeck() {
     $('#deck-empty-sub').textContent = hasCompleted
       ? 'Every card is done. Deal a new one below.'
       : 'Write your first card below to get started.';
+    updateDeckControls();
     return;
   }
 
   active.slice(0, VISIBLE).forEach((task, i) => {
-    const card = document.createElement('article');
+    const reused = existing.get(task.id);
+    const card = reused || document.createElement('article');
     card.className = 'card' + (i === 0 ? ' is-top' : ' is-under');
     card.dataset.id = task.id;
     card.style.zIndex = VISIBLE - i;
     card.style.transform = deckTransform(i);
-    card.innerHTML = `
+    if (!reused) card.innerHTML = `
       <div class="card-index"><span>card ${i + 1} of ${active.length}</span></div>
       <h2 class="card-title">${esc(task.title)}</h2>
       ${task.description ? `<p class="card-note">${esc(task.description)}</p>` : ''}
@@ -114,11 +121,15 @@ function renderDeck() {
           <button type="button" class="delete-card" ${i === 0 ? '' : 'tabindex="-1"'}>Delete</button>
         </span>
       </div>`;
-    deck.appendChild(card);
+    card.querySelector('.card-index span').textContent = `card ${i + 1} of ${active.length}`;
+    card.querySelectorAll('button').forEach(b => { b.tabIndex = i === 0 ? 0 : -1; b.disabled = pendingTasks.has(task.id); });
+    card.setAttribute('aria-hidden', i === 0 ? 'false' : 'true');
+    if (!reused) deck.appendChild(card);
   });
 
   const top = deck.querySelector('.card.is-top');
-  wireTopCard(top, active[0]);
+  if (top && !top.dataset.wired) { wireTopCard(top, active[0]); top.dataset.wired = 'true'; }
+  updateDeckControls();
 }
 
 /* Top card: drag to decide (direct manipulation, velocity carried into the fling) */
@@ -146,7 +157,8 @@ function wireTopCard(card, task) {
 
   let drag = null;
   card.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button') || state.editingCard) return;
+    if (e.target.closest('button,input,form') || state.editingCard || deckAnimating || pendingTasks.has(task.id)) return;
+    card._spring?.cancel();
     card.setPointerCapture(e.pointerId);
     drag = { x0: e.clientX, y0: e.clientY, x: 0, y: 0, vx: 0, lastT: performance.now(), lastX: e.clientX };
     card.classList.add('is-dragging');
@@ -178,13 +190,14 @@ function wireTopCard(card, task) {
     if (x > 110 || vx > 0.55) return flingOut(card, task, x, y, vx, 'done');
     if (x < -110 || vx < -0.55) return flingOut(card, task, x, y, vx, 'later');
     // snap back with a spring from the current offset
-    springTo({
+    card.classList.add('is-settling');
+    card._spring = springTo({
       from: x, to: 0, velocity: vx * 1000 / 60, stiffness: 300, damping: 22,
       onUpdate: (cx) => {
         const cy = y * (1 - Math.min(Math.abs(x - cx) / (Math.abs(x) || 1), 1));
         card.style.transform = `translate(${cx}px, ${reduceMotion ? 0 : cy}px) rotate(${cx / 18}deg)`;
       },
-      onRest: () => { card.style.transform = deckTransform(0); },
+      onRest: () => { card.style.transform = deckTransform(0); card.classList.remove('is-settling'); },
     });
   });
 
@@ -197,60 +210,104 @@ function wireTopCard(card, task) {
   });
 }
 
-/* Card leaves the deck with the throw's velocity, then the state change lands */
+/* Optimistic handoff: save and motion begin together, not in series.
+   Each task has one in-flight write. Responses never rebuild an unrelated card. */
+function updateDeckControls() {
+  const top = activeTasks()[0];
+  const blocked = deckAnimating || state.editingCard || !top || pendingTasks.has(top.id);
+  document.querySelectorAll('.card.is-top button').forEach(b => b.disabled = state.editingCard ? false : !!(top && pendingTasks.has(top.id)));
+  $('#done-button').disabled = blocked;
+  $('#later-button').disabled = blocked;
+  $('#sync-status').textContent = pendingTasks.size ? 'Saving changes...' : 'All changes saved';
+  $('#sync-status').classList.toggle('is-saving', pendingTasks.size > 0);
+}
+
+function paintState() { renderDeck(); renderSpread(); renderProgress(); updateDeckControls(); }
+function sortTasks() { state.tasks.sort((a, b) => Number(a.completed) - Number(b.completed) || a.sortOrder - b.sortOrder); }
+
 function flingOut(card, task, x, y, vx, outcome) {
-  const dirX = outcome === 'done' ? 1 : -1;
-  const startV = Math.max(Math.abs(vx), 0.9) * dirX;
-  if (reduceMotion) { commitFling(task, outcome); return; }
-  let cx = x, cy = y, rot = x / 18, last = null;
-  function step(ts) {
-    if (last === null) last = ts;
-    const dt = Math.min((ts - last) / 1000, 0.064);
-    last = ts;
-    cx += startV * 1400 * dt;
-    cy += 60 * dt;
-    rot += dirX * 26 * dt;
-    card.style.opacity = Math.max(0, 1 - Math.abs(cx) / 600);
-    card.style.transform = `translate(${cx}px, ${cy}px) rotate(${rot}deg)`;
-    if (Math.abs(cx) < 560) requestAnimationFrame(step);
-    else commitFling(task, outcome);
-  }
-  requestAnimationFrame(step);
+  if (!card || deckAnimating || state.editingCard || pendingTasks.has(task.id)) return;
+  card._spring?.cancel();
+  deckAnimating = true;
+  card.classList.add('is-leaving');
+  card.classList.remove('is-top', 'is-dragging', 'is-settling');
+  card.style.zIndex = VISIBLE + 1;
+  card.querySelectorAll('button').forEach(b => { b.disabled = true; b.tabIndex = -1; });
+  // The next card becomes available without waiting for the network.
+  commitFling(task, outcome);
+  const dir = outcome === 'done' ? 1 : -1;
+  const finish = () => { card.remove(); deckAnimating = false; updateDeckControls(); };
+  if (reduceMotion) { finish(); return; }
+  const animation = card.animate([
+    { transform: `translate(${x}px, ${y * .4}px) rotate(${x / 18}deg)`, opacity: 1 },
+    { transform: `translate(${dir * Math.max(innerWidth * .7, 580)}px, 32px) rotate(${dir * 22}deg)`, opacity: 0 }
+  ], { duration: 230, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' });
+  animation.finished.then(finish, finish);
 }
 
 async function commitFling(task, outcome) {
+  const previous = { completed: task.completed, sortOrder: task.sortOrder };
+  const fields = outcome === 'done' ? { completed: true } :
+    { sort_order: Math.max(Date.now(), ...state.tasks.map(t => t.sortOrder + 1)) };
+  pendingTasks.set(task.id, fields);
+  Object.assign(task, outcome === 'done' ? { completed: true } : { sortOrder: fields.sort_order });
+  sortTasks(); paintState();
   try {
-    if (outcome === 'done') {
-      await updateTask(task.id, { completed: true });
-      showToast(`Completed "${task.title}"`, {
-        action: 'Undo',
-        onAction: async () => {
-          $('#toast').hidden = true;
-          await updateTask(task.id, { completed: false, sort_order: Date.now() - 1e12 }); // back to the front
-          refresh();
-        },
-      });
-    } else {
-      await updateTask(task.id, { sort_order: Date.now() }); // back of the deck
-      showToast(`Sent "${task.title}" to the back`);
-    }
-    await refresh();
-  } catch (err) { showToast(err.message, { error: true }); await refresh(); }
+    const saved = await updateTask(task.id, fields);
+    const current = state.tasks.find(t => t.id === task.id);
+    if (current) Object.assign(current, saved);
+    pendingTasks.delete(task.id);
+    // No refresh GET here: the API returns the committed record.
+    renderSpread(); renderProgress(); updateDeckControls();
+    if (outcome === 'done') showToast(`Completed "${task.title}"`, {
+      action: 'Undo', onAction: () => undoDone(task.id),
+    });
+    else showToast(`Sent "${task.title}" to the back`);
+  } catch (err) {
+    pendingTasks.delete(task.id);
+    const current = state.tasks.find(t => t.id === task.id);
+    if (current) Object.assign(current, previous);
+    sortTasks();
+    // An HTTP failure is rolled back. Network failures may have committed;
+    // a read reconciles that ambiguity without retrying the write.
+    $('#deck').querySelectorAll(`[data-id="${task.id}"]:not(.is-leaving)`).forEach(c => c.remove());
+    paintState();
+    showToast('Could not confirm the change. Card restored; checking the server.', { error: true });
+    try { await refresh(); } catch { showToast('Connection lost. Change not confirmed. Reconnect and reload before trying again.', { error: true }); }
+  }
 }
 
-/* Buttons do exactly what the gestures do - always visible (swipe-deck a11y rule) */
+async function undoDone(id) {
+  if (pendingTasks.has(id)) return;
+  $('#toast').hidden = true;
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  pendingTasks.set(id, { completed: false }); updateDeckControls();
+  try {
+    const saved = await updateTask(id, { completed: false, sort_order: Math.min(Date.now(), ...state.tasks.map(t => t.sortOrder)) - 1 });
+    Object.assign(task, saved); pendingTasks.delete(id); sortTasks(); paintState();
+    showToast('Card returned to the front');
+  } catch (err) { pendingTasks.delete(id); updateDeckControls(); showToast(err.message, { error: true }); }
+}
+
 $('#done-button').addEventListener('click', () => {
   const top = activeTasks()[0];
-  if (top) flingOut(document.querySelector('.card.is-top'), top, 0, 0, 0.9, 'done');
+  if (top) flingOut(document.querySelector('.card.is-top'), top, 0, 0, .9, 'done');
 });
 $('#later-button').addEventListener('click', () => {
   const top = activeTasks()[0];
-  if (top) flingOut(document.querySelector('.card.is-top'), top, 0, 0, -0.9, 'later');
+  if (top) flingOut(document.querySelector('.card.is-top'), top, 0, 0, -.9, 'later');
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,button,form') || state.view !== 'deck' || e.repeat) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault(); $(e.key === 'ArrowRight' ? '#done-button' : '#later-button').click();
+  }
 });
 
 /* ---------- card edit ---------- */
 function openCardEdit(card, task) {
-  state.editingCard = true;
+  state.editingCard = true; updateDeckControls();
   card.innerHTML = `
     <form class="card-edit" novalidate>
       <input type="text" class="edit-title" value="${esc(task.title)}" maxlength="200" aria-label="Edit title" />
@@ -316,6 +373,7 @@ function renderSpread() {
         <button type="button" class="edit-task">Edit</button>
         <button type="button" class="delete-task">Delete</button>
       </div>`;
+    if (pendingTasks.has(task.id)) li.querySelectorAll('button').forEach(b => b.disabled = true);
     list.appendChild(li);
   });
 }
@@ -324,7 +382,7 @@ $('#task-list').addEventListener('click', async (e) => {
   const li = e.target.closest('.task');
   if (!li) return;
   const task = state.tasks.find((t) => t.id === Number(li.dataset.id));
-  if (!task) return;
+  if (!task || pendingTasks.has(task.id)) return;
 
   if (e.target.closest('.task-check')) {
     try {
@@ -333,7 +391,7 @@ $('#task-list').addEventListener('click', async (e) => {
       if (done) {
         showToast(`Completed "${task.title}"`, {
           action: 'Undo',
-          onAction: async () => { $('#toast').hidden = true; await updateTask(task.id, { completed: false }); refresh(); },
+          onAction: () => undoDone(task.id),
         });
       } else {
         showToast(`Reopened "${task.title}"`);
@@ -441,7 +499,11 @@ function renderProgress() {
 
 /* ---------- boot ---------- */
 async function refresh() {
-  state.tasks = await getTasks();
+  const tasks = await getTasks();
+  // Preserve optimistic records if an independent CRUD refresh overlaps a save.
+  state.tasks = tasks.map(t => pendingTasks.has(t.id) ? (state.tasks.find(local => local.id === t.id) || t) : t);
+  sortTasks();
+  $('#deck').querySelectorAll('.card:not(.is-leaving)').forEach(c => c.remove());
   renderDeck();
   renderSpread();
   renderProgress();
