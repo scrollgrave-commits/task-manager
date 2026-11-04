@@ -19,7 +19,7 @@
   --paper-edge: #e9e4d6;
   --ink: #1b2130;
   --ink-soft: #5c6478;
-  --ink-faint: #8a90a3;
+  --ink-faint: #5f6577;
 
   --accent: #2fbf8f;
   --accent-deep: #17dc9a;
@@ -91,6 +91,7 @@ body {
   touch-action: pan-y;
   transition: transform 0.45s var(--springy), box-shadow 0.3s ease, opacity 0.3s ease;
   will-change: transform;
+  overflow: hidden;
 }
 .card.is-top:hover { box-shadow: 0 2px 3px rgba(0,0,0,0.35), 0 26px 60px -14px rgba(0,0,0,0.65); }
 .card.is-dragging {
@@ -108,10 +109,11 @@ body {
 .card-title {
   font-size: 1.7rem; font-weight: 800; letter-spacing: -0.01em;
   line-height: 1.22; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .card-note {
   margin-top: 12px; color: var(--ink-soft); font-size: 1rem; line-height: 1.5;
-  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .card-foot { margin-top: auto; padding-top: 16px; border-top: 1px dashed #d6d0c0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-meta { font-size: 0.8rem; color: var(--ink-faint); font-weight: 600; }
@@ -233,7 +235,10 @@ body {
 
 .task-body { flex: 1; min-width: 0; }
 .task-title { font-size: 1.02rem; font-weight: 650; overflow-wrap: anywhere; }
-.task-desc { color: var(--muted); font-size: 0.9rem; margin-top: 3px; overflow-wrap: anywhere; }
+.task-desc {
+  color: var(--muted); font-size: 0.9rem; margin-top: 3px; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .task-meta { color: var(--faint); font-size: 0.78rem; margin-top: 6px; }
 
 .task-actions { display: flex; gap: 8px; flex-shrink: 0; }

@@ -110,8 +110,8 @@ function renderDeck() {
       <div class="card-foot">
         <span class="card-meta">Added ${formatDate(task.createdAt)}${task.updatedAt !== task.createdAt ? ` · edited ${formatDate(task.updatedAt)}` : ''}</span>
         <span class="card-tools">
-          <button type="button" class="edit-card">Edit</button>
-          <button type="button" class="delete-card">Delete</button>
+          <button type="button" class="edit-card" ${i === 0 ? '' : 'tabindex="-1"'}>Edit</button>
+          <button type="button" class="delete-card" ${i === 0 ? '' : 'tabindex="-1"'}>Delete</button>
         </span>
       </div>`;
     deck.appendChild(card);
