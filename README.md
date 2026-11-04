@@ -31,6 +31,13 @@ Backed by a REST CRUD API and a real SQLite database.
 - **Database:** SQLite via Node's built-in `node:sqlite` module (file `tasks.db`, created automatically)
 - **Frontend:** Vanilla HTML/CSS/JavaScript served by the same server (no build step)
 
+## Live demo
+
+Hosted on Cloudflare Workers + D1 (the same REST API, backed by a durable SQLite-compatible database):
+**https://the-deck-tasks.scrollgrave.workers.dev**
+
+It is a public assignment demo: anyone with the link can add, edit, complete and delete its tasks.
+
 ## Setup
 
 Requires Node.js **22.5 or newer** (for the built-in SQLite module).
@@ -121,6 +128,19 @@ steps (<https://blakecrosley.com/guides/design/things>,
 <https://www.tapsmart.com/features/the-classic-app-things/>) - while the warm paper card
 with ruled lines makes the deck metaphor literal and keeps ink-on-paper contrast high
 (WCAG AA on every text/background pair).
+
+## Deployment (Cloudflare Workers + D1)
+
+The app also ships a Workers port in `worker/` (same REST contract as `server.js`, D1 instead of the local SQLite file).
+
+```bash
+npm install
+npx wrangler d1 create task-manager-db   # paste the returned database_id into wrangler.toml
+npx wrangler d1 execute task-manager-db --remote --file=worker/schema.sql
+npx wrangler deploy
+```
+
+`wrangler.toml` keeps a placeholder `database_id` on purpose: replace it with the id from your own `wrangler d1 create`.
 
 ## Project structure
 

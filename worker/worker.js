@@ -62,7 +62,7 @@ async function handleApi(request, env, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api','tasks',':id'?]
   const idRaw = parts.length === 3 ? parts[2] : null;
 
-  if (parts.length > 3) return fail('Not found', 404);
+  if (parts.length > 3 || parts[1] !== 'tasks') return fail('Not found', 404);
 
   if (request.method === 'GET' && idRaw === null) {
     const status = url.searchParams.get('status') || 'all';
