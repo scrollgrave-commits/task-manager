@@ -50,6 +50,11 @@ function formatDate(iso) {
 /* ---------- toasts (stacked, each with its own timer and optional Undo) ----------
    Loop 14: a second action no longer kills the first one's undo window -
    complete one card and delete another right after, and both can be undone. */
+function syncToastPad() {
+  const stack = $('#toast-stack');
+  // the page grows by the stack's height so primary actions stay reachable
+  document.body.style.paddingBottom = stack.children.length ? `calc(56px + ${stack.offsetHeight}px)` : '';
+}
 function showToast(message, { error = false, action = null, onAction = null } = {}) {
   const stack = $('#toast-stack');
   const el = document.createElement('div');
@@ -66,9 +71,9 @@ function showToast(message, { error = false, action = null, onAction = null } = 
   const dismiss = () => {
     clearTimeout(timer);
     if (!el.isConnected) return;
-    if (reduceMotion) { el.remove(); return; }
+    if (reduceMotion) { el.remove(); syncToastPad(); return; }
     el.classList.add('toast-out');
-    setTimeout(() => el.remove(), 180);
+    setTimeout(() => { el.remove(); syncToastPad(); }, 180);
   };
   if (action) {
     const btn = document.createElement('button');
@@ -78,8 +83,18 @@ function showToast(message, { error = false, action = null, onAction = null } = 
     btn.onclick = () => { dismiss(); onAction && onAction(); };
     el.appendChild(btn);
   }
+  if (!action) {
+    // plain notices coalesce: only the newest matters
+    stack.querySelectorAll('.toast:not(.toast-undo)').forEach((t) => t.remove());
+  } else {
+    el.classList.add('toast-undo');
+  }
   stack.appendChild(el);
-  while (stack.children.length > 3) stack.firstElementChild.remove();
+  // actionable toasts are never dropped before their own timer - instead,
+  // when the stack runs long the older ones go compact
+  const toasts = [...stack.children];
+  toasts.forEach((t, i) => t.classList.toggle('toast-compact', toasts.length > 3 && i < toasts.length - 2));
+  requestAnimationFrame(syncToastPad);
   timer = setTimeout(dismiss, action ? 5000 : 2600);
   return dismiss;
 }
@@ -332,7 +347,7 @@ async function commitFling(task, outcome) {
 async function undoDone(id) {
   if (pendingTasks.has(id)) return;
   const task = state.tasks.find(t => t.id === id);
-  if (!task) return;
+  if (!task) { showToast('That card is already gone - nothing to undo.'); return; }
   pendingTasks.set(id, { completed: false }); updateDeckControls();
   try {
     const saved = await updateTask(id, { completed: false, sort_order: Math.min(Date.now(), ...state.tasks.map(t => t.sortOrder)) - 1 });

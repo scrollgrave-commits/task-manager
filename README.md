@@ -160,8 +160,12 @@ Toasts now stack instead of replacing each other: complete one card and delete
 another a second later, and both stay undoable for their full five seconds - the
 second action no longer kills the first one's chance to come back. Each toast in
 the stack carries its own timer and its own Undo, plain messages still clear on a
-shorter clock, the stack caps at three with the oldest dropping off, and dismissed
-toasts settle out with a short fade (instant under reduced motion).
+shorter clock, plain notices coalesce into the newest one, and an unexpired Undo is
+never dropped - when a rapid streak runs long, older toasts go compact instead of
+disappearing. The page grows by the stack's height while toasts are up, so the Deal
+button stays reachable underneath, an Undo for a card that no longer exists says so
+instead of silently doing nothing, and dismissed toasts settle out with a short fade
+(instant under reduced motion).
 
 ## Deployment (Cloudflare Workers + D1)
 

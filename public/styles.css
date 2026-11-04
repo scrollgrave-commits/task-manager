@@ -632,3 +632,11 @@ body { overflow-x: hidden; }
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 #task-list .drag-task, #task-list .drag-task * { -webkit-user-drag: none; user-select: none; }
+
+/* Loop 14b: undo toasts are never dropped early - a long stack goes compact
+   instead of eating an unexpired Undo. */
+#toast-stack .toast.toast-compact {
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
