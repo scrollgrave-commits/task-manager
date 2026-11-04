@@ -489,9 +489,16 @@ body { overflow-x: hidden; }
 
 .task-check { margin-top: 2px; border-color: #b3ab97; }
 .task-check:hover { border-color: var(--ink-soft); }
-.task.completed { opacity: 0.66; border-style: none; transform: rotate(1.1deg); }
-.task.completed:hover { opacity: 0.85; }
-.task.completed .task-title { text-decoration: none; color: var(--ink-faint); }
+/* Loop 4: completed state is stamp + tick + crossed title, never an opacity fade.
+   Whole-card 0.66 opacity composited text down to 1.6-2.0:1 contrast - unreadable. */
+.task.completed {
+  border-style: none; transform: rotate(1.1deg);
+  background: linear-gradient(165deg, #f1efe6 0%, #e8e4d7 100%);
+}
+.task.completed .task-title {
+  color: var(--ink-faint);
+  text-decoration: line-through; text-decoration-thickness: 1.5px;
+}
 .task.completed .task-desc { color: var(--ink-faint); }
 
 .task-body { flex: 1; min-width: 0; }
@@ -513,8 +520,8 @@ body { overflow-x: hidden; }
 .spread-stamp {
   position: absolute; top: 10px; right: 12px;
   font-size: 0.6rem; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--accent); border: 2px solid var(--accent); border-radius: 6px;
-  padding: 1px 6px; transform: rotate(9deg); opacity: 0.9; pointer-events: none;
+  color: #0f6b48; border: 2px solid #0f6b48; border-radius: 6px;
+  padding: 1px 6px; transform: rotate(9deg); opacity: 0.95; pointer-events: none;
 }
 
 /* edit form on paper */

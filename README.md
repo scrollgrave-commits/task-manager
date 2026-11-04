@@ -206,8 +206,11 @@ motion support. Saves and card handoff keep the same non-blocking path.
 
 The management view now lays tasks out as paper mini-cards on the desk instead of
 generic list rows, keeping the deck metaphor in both views. Cards alternate a
-slight desk-drop rotation and lift flat on hover. Completed cards dim, tilt and
-carry a small DONE stamp rather than a struck-through list row. Entering the
+slight desk-drop rotation and lift flat on hover. Completed cards tilt and
+carry a small DONE stamp, a filled check and a crossed-out title instead of an
+opacity fade: fading the whole card composited text down to unreadable contrast,
+so the completed state now comes from paper cues while every word and action on
+the card stays fully legible (4.5:1 or better against the muted paper). Entering the
 spread or changing a filter deals the cards in with a staggered spring entrance;
 a card created while the spread is open deals itself in on its own. Editing and
 the two-step delete stay on each card, and the check circle still completes or
