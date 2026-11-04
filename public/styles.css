@@ -1,0 +1,170 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --danger: #dc2626;
+  --surface: #ffffff;
+  --bg: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 10px;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+.container { max-width: 640px; margin: 0 auto; }
+
+.header { text-align: center; margin-bottom: 24px; }
+.header h1 { font-size: 1.9rem; }
+.subtitle { color: var(--muted); margin-top: 4px; }
+
+.add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--surface);
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.add-form input {
+  flex: 1 1 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.add-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#add-button {
+  flex: 1 1 100%;
+  padding: 11px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+#add-button:hover:not(:disabled) { background: var(--accent-dark); }
+#add-button:disabled { opacity: 0.6; cursor: wait; }
+.form-error { flex: 1 1 100%; color: var(--danger); font-size: 0.9rem; }
+
+.filters { display: flex; gap: 8px; margin: 20px 0 14px; }
+.filter {
+  flex: 1;
+  padding: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+.filter.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.filter span { font-weight: 700; margin-left: 4px; }
+
+.task-list { display: flex; flex-direction: column; gap: 10px; }
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.task.completed .task-title { text-decoration: line-through; color: var(--muted); }
+.task.busy { opacity: 0.55; pointer-events: none; }
+
+.task-check {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 1.05rem; font-weight: 600; word-wrap: break-word; }
+.task-desc { color: var(--muted); font-size: 0.92rem; margin-top: 2px; word-wrap: break-word; white-space: pre-wrap; }
+.task-meta { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+
+.task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.task-actions button {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 7px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-height: 36px;
+}
+.task-actions button:hover { background: var(--bg); }
+.task-actions .delete-btn { color: var(--danger); border-color: #fecaca; }
+.task-actions .delete-btn.arm { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+.edit-form { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.edit-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  font-size: 0.95rem;
+}
+.edit-actions { display: flex; gap: 8px; }
+.edit-actions button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-height: 36px;
+}
+.save-btn { background: var(--accent); color: #fff; }
+.cancel-btn { background: var(--bg); color: var(--muted); }
+
+.empty-state { text-align: center; color: var(--muted); padding: 32px 0; }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 24px;
+  font-size: 0.92rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+  max-width: 90vw;
+  z-index: 50;
+}
+.toast.error { background: var(--danger); }
+
+@media (min-width: 560px) {
+  .add-form input { flex: 1 1 calc(50% - 5px); }
+  #add-button { flex: 0 0 auto; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task { transition: none; }
+}

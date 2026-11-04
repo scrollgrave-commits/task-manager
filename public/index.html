@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>Task Manager</h1>
+      <p class="subtitle">Add, edit, complete and delete your tasks</p>
+    </header>
+
+    <form id="add-form" class="add-form" novalidate>
+      <input id="new-title" type="text" placeholder="Task title (required)" maxlength="200" required />
+      <input id="new-description" type="text" placeholder="Description (optional)" maxlength="1000" />
+      <button id="add-button" type="submit">Add task</button>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+    </form>
+
+    <nav class="filters" aria-label="Task filters">
+      <button class="filter active" data-status="all">All <span id="count-all">0</span></button>
+      <button class="filter" data-status="active">Active <span id="count-active">0</span></button>
+      <button class="filter" data-status="completed">Completed <span id="count-completed">0</span></button>
+    </nav>
+
+    <section id="task-list" class="task-list" aria-live="polite"></section>
+    <p id="empty-state" class="empty-state" hidden>No tasks here yet.</p>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
