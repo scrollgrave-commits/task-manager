@@ -216,3 +216,13 @@ a card created while the spread is open deals itself in on its own. Editing and
 the two-step delete stay on each card, and the check circle still completes or
 reopens a task. All of it honors prefers-reduced-motion, and the API and deck
 handoff path are untouched.
+
+### Desk transitions and empty desks
+
+The view switch uses named view transitions for the stable chrome - header,
+toolbar and composer morph smoothly between the two layouts instead of
+double-exposing as full-page ghosts, while the deck and spread content crossfade
+in place. The spread remembers itself across reloads, so the desk you were
+managing is the desk you return to. Empty states say which filter emptied the
+desk: "The deck is clear" for no active cards, "Nothing done yet" for no
+completed ones, and a prompt to deal the first card when there are none at all.

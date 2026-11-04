@@ -539,3 +539,11 @@ body { overflow-x: hidden; }
 
 /* Stamp clearance: long titles on completed spread cards must not collide with the stamp. */
 .task.completed .task-title { padding-right: 58px; }
+
+/* Loop 5: named view transitions - chrome morphs between views instead of
+   double-exposing as a full-page ghost. */
+@supports (view-transition-name: none) {
+  .header { view-transition-name: deck-masthead; }
+  .desk-toolbar { view-transition-name: deck-toolbar; }
+  #add-form { view-transition-name: deck-composer; }
+}

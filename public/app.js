@@ -8,6 +8,9 @@ const state = {
   filter: 'all',
   editingCard: false,
 };
+try {  // Loop 5: remember which desk the user was working at
+  if (localStorage.getItem('the-deck:view') === 'spread') state.view = 'spread';
+} catch {}
 
 const pendingTasks = new Map();
 let deckAnimating = false;
@@ -365,7 +368,16 @@ function renderSpread() {
   });
 
   list.innerHTML = '';
-  $('#list-empty').hidden = filtered.length > 0;
+  // Loop 5: the empty desk says which filter left it empty
+  const emptyEl = $('#list-empty');
+  emptyEl.hidden = filtered.length > 0;
+  if (!filtered.length) {
+    emptyEl.textContent =
+      state.tasks.length === 0 ? 'No cards yet. Deal your first one below.' :
+      state.filter === 'active' ? 'The deck is clear - every card is done.' :
+      state.filter === 'completed' ? 'Nothing done yet. Finished cards land here.' :
+      'No tasks here yet.';
+  }
 
   filtered.forEach((task, index) => {
     const li = document.createElement('li');
@@ -470,6 +482,7 @@ document.querySelectorAll('.filter').forEach((b) =>
 /* ---------- view toggle ---------- */
 $('#view-toggle').addEventListener('click', () => {
   state.view = state.view === 'deck' ? 'spread' : 'deck';
+  try { localStorage.setItem('the-deck:view', state.view); } catch {}
   if (!reduceMotion && document.startViewTransition) document.startViewTransition(() => applyView());
   else applyView();
 });
