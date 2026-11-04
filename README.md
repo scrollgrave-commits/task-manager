@@ -226,3 +226,12 @@ in place. The spread remembers itself across reloads, so the desk you were
 managing is the desk you return to. Empty states say which filter emptied the
 desk: "The deck is clear" for no active cards, "Nothing done yet" for no
 completed ones, and a prompt to deal the first card when there are none at all.
+
+### Toolbar text swaps without double-exposure
+
+The desk toolbar keeps its place across views, but its words change: "Focus
+deck" becomes "All your cards" and the toggle flips its label. Crossfading the
+whole bar showed both texts overlapped mid-transition. The swapping pieces now
+get their own named transitions with a quick out-then-in (80ms out, 120ms in),
+so the bar stays put while its words flip one at a time. Verified frame by
+frame at slowed speed: no two labels share the bar at any moment.

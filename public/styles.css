@@ -546,4 +546,15 @@ body { overflow-x: hidden; }
   .header { view-transition-name: deck-masthead; }
   .desk-toolbar { view-transition-name: deck-toolbar; }
   #add-form { view-transition-name: deck-composer; }
+  /* Loop 6: the toolbar bar stays put across views, but its text swaps.
+     Capture the swapping pieces separately with a fast out-then-in so old
+     and new labels never double-expose mid-transition. */
+  .desk-toolbar > div { view-transition-name: deck-toolbar-status; }
+  #view-toggle { view-transition-name: deck-toolbar-toggle; }
 }
+::view-transition-old(deck-toolbar-status),
+::view-transition-old(deck-toolbar-toggle) { animation: vt-swap-out .08s ease-in both; }
+::view-transition-new(deck-toolbar-status),
+::view-transition-new(deck-toolbar-toggle) { animation: vt-swap-in .12s ease-out .06s both; }
+@keyframes vt-swap-out { to { opacity: 0; } }
+@keyframes vt-swap-in { from { opacity: 0; } }
