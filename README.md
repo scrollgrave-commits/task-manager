@@ -60,7 +60,7 @@ Base URL: `http://localhost:3000/api/tasks`
 | GET    | `/`                  | List tasks (`?status=all|active|completed`) | 200 | 400 bad status  |
 | POST   | `/`                  | Create a task `{title, description?}`      | 201 | 400 validation  |
 | GET    | `/:id`               | Get one task                       | 200     | 400, 404        |
-| PUT    | `/:id`               | Edit `title`/`description`, set `completed`, and/or set `sort_order` (deck position) | 200 | 400, 404   |
+| PUT    | `/:id`               | Edit `title`/`description`, set `completed`, set `sort_order` (deck position), and/or reattach a completion stamp with `completed_at` + `completed_at_estimated` (requires the task to be completed) | 200 | 400, 404   |
 | DELETE | `/:id`               | Delete a task                      | 204     | 400, 404        |
 
 All responses are JSON. Errors return `{ "error": "message" }`.
@@ -273,3 +273,12 @@ a card.
 **Spread card footers stack.**
 The card meta line sits on its own row above the action buttons, so added/done
 stamps never wrap into orphaned fragments when all three actions are present.
+
+**Deleted cards can be brought back.**
+Deleting shows Undo for five seconds, same as completing. The restore re-deals
+the card's content at its old deck position and reattaches the original
+completion stamp with its provenance flag - an estimated "Done around" stays
+estimated, an exact "Done" stays exact (the API accepts `completed_at` and
+`completed_at_estimated` on PUT for exactly this). A restored card is a new
+row, so its Added stamp starts fresh; an update within a minute of creation no
+longer shows as "edited", so restores (and quick touch-ups) don't stamp noise.

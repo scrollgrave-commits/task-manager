@@ -248,7 +248,10 @@ function cardMeta(task) {
     // Legacy stamps (before completion tracking) are estimates; say so.
     parts.push(task.completedAtEstimated ? `Done around ${formatDate(task.completedAt)}` : `Done ${formatDate(task.completedAt)}`);
   }
-  if (task.updatedAt !== task.createdAt && task.updatedAt !== task.completedAt) parts.push(`edited ${formatDate(task.updatedAt)}`);
+  // An update within a minute of creation is the card settling in (or a
+  // restore), not an edit worth stamping.
+  const editedMs = Date.parse(task.updatedAt) - Date.parse(task.createdAt);
+  if (editedMs > 60000 && task.updatedAt !== task.completedAt) parts.push(`edited ${formatDate(task.updatedAt)}`);
   return parts.join(' · ');
 }
 
@@ -315,6 +318,29 @@ async function undoDone(id) {
     Object.assign(task, saved); pendingTasks.delete(id); sortTasks(); paintState();
     showToast('Card returned to the front');
   } catch (err) { pendingTasks.delete(id); updateDeckControls(); showToast(err.message, { error: true }); }
+}
+
+/* Loop 11: a deleted card can be brought back within the toast window.
+   The restore re-deals the content and reattaches the original completion
+   stamp with its provenance flag, so an estimated stamp stays estimated.
+   The restored card is a new row: its Added stamp starts fresh. */
+async function restoreTask(snapshot) {
+  $('#toast').hidden = true;
+  try {
+    const created = await createTask(snapshot.title, snapshot.description);
+    const fields = { sort_order: snapshot.sortOrder };
+    if (snapshot.completed) {
+      fields.completed = true;
+      if (snapshot.completedAt) fields.completed_at = snapshot.completedAt;
+      fields.completed_at_estimated = !!snapshot.completedAtEstimated;
+    }
+    await updateTask(created.id, fields);
+    await refresh();
+    showToast(`Restored "${snapshot.title}"`);
+  } catch (err) {
+    showToast(`Could not restore "${snapshot.title}": ${err.message}`, { error: true });
+    try { await refresh(); } catch {}
+  }
 }
 
 $('#done-button').addEventListener('click', () => {
@@ -507,8 +533,9 @@ $('#task-list').addEventListener('click', async (e) => {
       return;
     }
     try {
+      const snapshot = { ...task };
       await deleteTask(task.id);
-      showToast(`Deleted "${task.title}"`);
+      showToast(`Deleted "${task.title}"`, { action: 'Undo', onAction: () => restoreTask(snapshot) });
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
     return;

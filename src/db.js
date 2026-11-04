@@ -89,9 +89,10 @@ function createTask({ title, description }) {
   return getTask(Number(result.lastInsertRowid));
 }
 
-function updateTask(id, { title, description, completed, sort_order }) {
+function updateTask(id, { title, description, completed, sort_order, completedAt, completedAtEstimated }) {
   const existing = getTask(id);
   if (!existing) return null;
+  const completedNow = completed !== undefined ? completed : existing.completed;
   const now = new Date().toISOString();
   const next = {
     title: title !== undefined ? title : existing.title,
@@ -101,10 +102,14 @@ function updateTask(id, { title, description, completed, sort_order }) {
     // Stamp the moment a card is finished; clear it if it is reopened.
     // A stamp written here is exact (estimated = 0); a kept legacy stamp keeps
     // its estimated flag.
-    completedAt: completed === undefined ? existing.completedAt
-      : (completed ? (existing.completed ? existing.completedAt : now) : null),
-    completedAtEstimated: completed === undefined ? existing.completedAtEstimated
-      : (completed ? (existing.completed ? existing.completedAtEstimated : false) : false),
+    completedAt: completed === undefined && completedAt === undefined ? existing.completedAt
+      : (!completedNow ? null
+        : (completedAt !== undefined ? completedAt
+        : (existing.completed ? existing.completedAt : now))),
+    completedAtEstimated: completed === undefined && completedAtEstimated === undefined ? existing.completedAtEstimated
+      : (!completedNow ? false
+        : (completedAtEstimated !== undefined ? completedAtEstimated
+        : (existing.completed ? existing.completedAtEstimated : false))),
   };
   db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ?, completed_at_estimated = ? WHERE id = ?')
     .run(next.title, next.description, next.completed, next.sortOrder, now, next.completedAt, next.completedAtEstimated ? 1 : 0, id);

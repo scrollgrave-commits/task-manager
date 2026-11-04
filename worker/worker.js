@@ -37,6 +37,13 @@ function validateTaskInput(body, partial) {
   if (body.sort_order !== undefined && (typeof body.sort_order !== 'number' || !Number.isFinite(body.sort_order))) {
     errors.push('sort_order must be a number');
   }
+  if (body.completed_at !== undefined &&
+      (typeof body.completed_at !== 'string' || Number.isNaN(Date.parse(body.completed_at)))) {
+    errors.push('completed_at must be an ISO 8601 date string');
+  }
+  if (body.completed_at_estimated !== undefined && typeof body.completed_at_estimated !== 'boolean') {
+    errors.push('completed_at_estimated must be true or false');
+  }
   return errors;
 }
 
@@ -108,8 +115,9 @@ async function handleApi(request, env, url) {
       body = body || {};
       const errors = validateTaskInput(body, true);
       if (errors.length > 0) return fail(errors.join('; '), 400);
-      if (body.title === undefined && body.description === undefined && body.completed === undefined && body.sort_order === undefined) {
-        return fail('provide at least one of: title, description, completed, sort_order', 400);
+      if (body.title === undefined && body.description === undefined && body.completed === undefined
+          && body.sort_order === undefined && body.completed_at === undefined && body.completed_at_estimated === undefined) {
+        return fail('provide at least one of: title, description, completed, sort_order, completed_at, completed_at_estimated', 400);
       }
       const existing = await getTask(db, id);
       if (!existing) return fail(`Task ${id} not found`, 404);
@@ -118,10 +126,20 @@ async function handleApi(request, env, url) {
       // Stamp the moment a card is finished; clear it if it is reopened.
       // A stamp written here is exact (estimated = 0); a kept legacy stamp
       // keeps its estimated flag.
-      const completedAt = body.completed === undefined ? existing.completedAt
-        : (body.completed ? (existing.completed ? existing.completedAt : now) : null);
-      const completedAtEstimated = body.completed === undefined ? existing.completedAtEstimated
-        : (body.completed ? (existing.completed ? existing.completedAtEstimated : false) : false);
+      // completed_at/_estimated may be supplied to reattach an original stamp
+      // faithfully (undo-delete restore); they only apply to a completed card.
+      const completedNow2 = body.completed !== undefined ? body.completed : existing.completed;
+      if ((body.completed_at !== undefined || body.completed_at_estimated !== undefined) && !completedNow2) {
+        return fail('completed_at and completed_at_estimated require the task to be completed', 400);
+      }
+      const completedAt = body.completed === undefined && body.completed_at === undefined ? existing.completedAt
+        : (!completedNow2 ? null
+          : (body.completed_at !== undefined ? body.completed_at
+          : (existing.completed ? existing.completedAt : now)));
+      const completedAtEstimated = body.completed === undefined && body.completed_at_estimated === undefined ? existing.completedAtEstimated
+        : (!completedNow2 ? false
+          : (body.completed_at_estimated !== undefined ? body.completed_at_estimated
+          : (existing.completed ? existing.completedAtEstimated : false)));
       await db
         .prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ?, completed_at_estimated = ? WHERE id = ?')
         .bind(

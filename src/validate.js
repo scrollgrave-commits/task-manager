@@ -28,6 +28,13 @@ function validateTaskInput(body, { partial }) {
   if (body.completed !== undefined && typeof body.completed !== 'boolean') {
     errors.push('completed must be true or false');
   }
+  if (body.completed_at !== undefined &&
+      (typeof body.completed_at !== 'string' || Number.isNaN(Date.parse(body.completed_at)))) {
+    errors.push('completed_at must be an ISO 8601 date string');
+  }
+  if (body.completed_at_estimated !== undefined && typeof body.completed_at_estimated !== 'boolean') {
+    errors.push('completed_at_estimated must be true or false');
+  }
 
   if (body.sort_order !== undefined && (typeof body.sort_order !== 'number' || !Number.isFinite(body.sort_order))) {
     errors.push('sort_order must be a number');
