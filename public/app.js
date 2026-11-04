@@ -394,6 +394,8 @@ function renderSpread() {
   filtered.forEach((task, index) => {
     const li = document.createElement('li');
     li.className = 'task' + (task.completed ? ' completed' : '');
+    // Loop 8: an active card on the desk can be picked up - pulled to the top of the deck
+    if (!task.completed) li.title = 'Pick up this card';
     li.dataset.id = task.id;
     li.style.setProperty('--i', Math.min(index, 14));
     if (spreadDealIn || task.id === lastAddedId) li.classList.add('deal-in');
@@ -485,8 +487,45 @@ $('#task-list').addEventListener('click', async (e) => {
       showToast(`Deleted "${task.title}"`);
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
+    return;
   }
+
+  // Loop 8: click anywhere else on an active card picks it up - top of the focus deck.
+  // Completed cards stay put; an open edit form absorbs its own clicks.
+  if (task.completed || e.target.closest('.task-edit')) return;
+  pullToTop(task);
 });
+
+/* Loop 8: pick a card up from the spread - it jumps to the top of the deck.
+   Same optimistic + rollback discipline as a fling. */
+async function pullToTop(task) {
+  if (pendingTasks.has(task.id)) return;
+  const previous = task.sortOrder;
+  const fields = { sort_order: Math.min(Date.now(), ...state.tasks.map(t => t.sortOrder)) - 1 };
+  pendingTasks.set(task.id, fields);
+  task.sortOrder = fields.sort_order;
+  sortTasks();
+  state.view = 'deck';
+  try { localStorage.setItem('the-deck:view', 'deck'); } catch {}
+  const swap = () => { applyView(); paintState(); };
+  if (!reduceMotion && document.startViewTransition) document.startViewTransition(swap);
+  else swap();
+  try {
+    const saved = await updateTask(task.id, fields);
+    const current = state.tasks.find(t => t.id === task.id);
+    if (current) Object.assign(current, saved);
+    pendingTasks.delete(task.id);
+    sortTasks(); paintState();
+    showToast(`Picked up "${task.title}"`);
+  } catch (err) {
+    pendingTasks.delete(task.id);
+    const current = state.tasks.find(t => t.id === task.id);
+    if (current) current.sortOrder = previous;
+    sortTasks(); paintState();
+    showToast('Could not confirm the change. Card restored; checking the server.', { error: true });
+    try { await refresh(); } catch { showToast('Connection lost. Change not confirmed. Reconnect and reload before trying again.', { error: true }); }
+  }
+}
 
 document.querySelectorAll('.filter').forEach((b) =>
   b.addEventListener('click', () => { state.filter = b.dataset.filter; spreadDealIn = true; renderSpread(); }));

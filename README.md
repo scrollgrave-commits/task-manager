@@ -250,3 +250,13 @@ returns `completedAtEstimated: true` for them and the UI reads "Done around ..."
 instead of "Done ...". Completions from this version on are recorded exactly.
 The one-time flip happens only in the moment the migration column is first
 added, so restarts never mislabel a fresh exact stamp.
+
+**Pick up a card from the spread, and cards that read as decks.**
+Two cues from the Tactile Card Stack page design
+(<https://antjanus.com/page-designs/card-stack>): every spread card now carries
+hard-edged card layers beneath it (offset solid paper tones, not more blur), so
+each card reads as a small deck on the desk; and clicking an active card in the
+spread picks it up - it jumps to the top of the focus deck so you can act on it
+immediately. Completed cards stay put, an open edit form absorbs its own clicks,
+and the move is optimistic with the same rollback discipline as a swipe. The
+deck edge stays flat under reduced motion and adds no work to first paint.
