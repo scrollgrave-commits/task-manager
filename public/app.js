@@ -85,6 +85,7 @@ function deckTransform(i) {
 function renderDeck() {
   const deck = $('#deck');
   const active = activeTasks();
+  $('#active-count').textContent = `${active.length} active`;
   const existing = new Map([...deck.children].filter(c => !c.classList.contains('is-leaving')).map(c => [Number(c.dataset.id), c]));
   const keep = new Set(active.slice(0, VISIBLE).map(t => t.id));
   for (const [id, card] of existing) if (!keep.has(id)) card.remove();
@@ -108,6 +109,7 @@ function renderDeck() {
     card.dataset.id = task.id;
     card.style.zIndex = VISIBLE - i;
     card.style.transform = deckTransform(i);
+    card.style.setProperty('--depth', i);
     if (!reused) card.innerHTML = `
       <div class="card-index"><span>card ${i + 1} of ${active.length}</span></div>
       <h2 class="card-title">${esc(task.title)}</h2>
@@ -173,6 +175,11 @@ function wireTopCard(card, task) {
     drag.x = e.clientX - drag.x0;
     drag.y = e.clientY - drag.y0;
     if (!reduceMotion) {
+      const reveal = Math.min(Math.abs(drag.x) / 150, 1);
+      document.querySelectorAll('.card.is-under').forEach((under, index) => {
+        const i = index + 1; under.style.transition = 'none';
+        under.style.transform = `translateY(${-i * 13 + reveal * 13}px) scale(${1 - i * .045 + reveal * .045}) rotate(${(i % 2 ? 1.6 : -1.3) * (1 - reveal)}deg)`;
+      });
       card.style.transform = `translate(${drag.x}px, ${drag.y * 0.4}px) rotate(${drag.x / 18}deg)`;
       stampDone.style.opacity = Math.max(0, Math.min(drag.x / 90, 1));
       stampLater.style.opacity = Math.max(0, Math.min(-drag.x / 90, 1));
@@ -184,6 +191,7 @@ function wireTopCard(card, task) {
     const { x, y, vx } = drag;
     drag = null;
     card.classList.remove('is-dragging');
+    document.querySelectorAll('.card.is-under').forEach((under, index) => { under.style.transition = ''; under.style.transform = deckTransform(index + 1); });
     stampDone.style.opacity = 0;
     stampLater.style.opacity = 0;
 
@@ -206,6 +214,7 @@ function wireTopCard(card, task) {
     drag = null;
     card.classList.remove('is-dragging');
     card.style.transform = deckTransform(0);
+    document.querySelectorAll('.card.is-under').forEach((under, index) => { under.style.transition = ''; under.style.transform = deckTransform(index + 1); });
     stampDone.style.opacity = 0; stampLater.style.opacity = 0;
   });
 }
@@ -452,13 +461,15 @@ document.querySelectorAll('.filter').forEach((b) =>
 /* ---------- view toggle ---------- */
 $('#view-toggle').addEventListener('click', () => {
   state.view = state.view === 'deck' ? 'spread' : 'deck';
-  applyView();
+  if (!reduceMotion && document.startViewTransition) document.startViewTransition(() => applyView());
+  else applyView();
 });
 function applyView() {
   const spread = state.view === 'spread';
   $('#deck-view').hidden = spread;
   $('#spread-view').hidden = !spread;
-  $('#view-toggle-label').textContent = spread ? 'Back to the deck' : 'Spread view';
+  $('#view-toggle-label').textContent = spread ? 'Focus deck' : 'Spread view';
+  $('#workspace-label').textContent = spread ? 'All your cards' : 'Focus deck';
   $('#view-toggle').setAttribute('aria-pressed', spread);
 }
 

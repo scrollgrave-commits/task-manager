@@ -191,3 +191,13 @@ Desktop arrow keys also operate the deck when focus is outside a form or button.
 
 The compact responsive layout keeps the paper-card deck and separates the composer
 from the active card. API routes and the SQLite/D1 schema are unchanged.
+
+### Workspace and gesture refinement
+
+The focus/spread switch sits in a shared toolbar with the active-card count, so it
+stays in the same place in both views. The composer has its own labelled section.
+Laptop layouts adjust vertically on shorter displays; mobile retains full-width
+controls. During a horizontal drag, the underlying cards move forward in proportion
+to the drag distance and settle back on cancellation. The view switch crossfades
+when the browser supports View Transitions, with an immediate fallback and reduced-
+motion support. Saves and card handoff keep the same non-blocking path.

@@ -24,6 +24,10 @@
     </header>
 
     <p id="sync-status" class="sync-status" role="status">Connecting...</p>
+    <nav class="desk-toolbar" aria-label="Workspace">
+      <div><span class="workspace-dot" aria-hidden="true"></span><span id="workspace-label">Focus deck</span><span id="active-count" class="workspace-count"></span></div>
+      <button type="button" id="view-toggle" class="view-toggle" aria-pressed="false"><span id="view-toggle-label">Spread view</span><span aria-hidden="true"> ↗</span></button>
+    </nav>
     <main>
       <!-- Deck view: the top card is your current focus -->
       <section id="deck-view" aria-label="Task deck">
@@ -41,7 +45,7 @@
           <button type="button" id="later-button" class="btn-later" title="Send this card to the back of the deck">
             <span aria-hidden="true">↺</span> Later
           </button>
-          <p class="deck-hint">drag right to finish · left to send back</p>
+          <p class="deck-hint"><span>← send back</span><span>finish →</span></p>
           <button type="button" id="done-button" class="btn-done" title="Complete this card">
             <span aria-hidden="true">✓</span> Done
           </button>
@@ -60,12 +64,9 @@
       </section>
     </main>
 
-    <button type="button" id="view-toggle" class="view-toggle" aria-pressed="false">
-      <span id="view-toggle-label">Spread view</span>
-    </button>
-
     <!-- Deal a new card -->
     <form id="add-form" class="add-form" novalidate>
+      <label class="composer-label" for="new-title">A new card <span>One clear next step.</span></label>
       <div class="add-slip">
         <div class="add-inputs">
           <input id="new-title" type="text" placeholder="Write a new card..." autocomplete="off" maxlength="200" aria-label="Task title" />

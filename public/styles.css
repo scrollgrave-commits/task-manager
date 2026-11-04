@@ -399,3 +399,71 @@ body { padding-top: 32px; }
 html { overflow-x: hidden; }
 body { overflow-x: hidden; }
 #deck-view { overflow-x: clip; }
+
+/* Loop 2: an intentional workspace, not a lone card in empty space. */
+:root { --desk: radial-gradient(ellipse at 50% 0%, #1b2a30 0%, #0b1117 56%, #090e13 100%); }
+.app { max-width: 760px; }
+.header { margin-bottom: 22px; }
+.header h1 { font-size: 2.8rem; font-weight: 750; }
+.sync-status { font-size: .7rem; margin-bottom: 24px; }
+.desk-toolbar { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #ffffff12; border-bottom: 1px solid #ffffff12; padding: 12px 0; margin-bottom: 18px; }
+.desk-toolbar > div { display: flex; gap: 9px; align-items: center; font-size: .8rem; font-weight: 650; }
+.workspace-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+.workspace-count { color: var(--muted); font-weight: 450; border-left: 1px solid var(--border); padding-left: 10px; margin-left: 3px; font-size: .73rem; }
+.desk-toolbar .view-toggle { display: flex; gap: 12px; align-items: center; margin: 0; padding: 6px 12px; border: 0; background: #ffffff08; border-radius: 9px; font-size: .73rem; min-height: 36px; }
+.deck-stage { height: 334px; }
+.card { height: 288px; max-width: 500px; padding: 25px 30px 20px; border-radius: 15px; box-shadow: 0 1px 1px #ffffff44 inset, 0 14px 35px -14px #0009; }
+.card-title { font-size: 1.9rem; font-weight: 750; line-height: 1.2; }
+.card-index { margin-bottom: 20px; }
+.card-foot { border-top-style: solid; border-color: #1b213014; }
+.card-tools button { border: 0; background: #1b213007; color: #4d5668; }
+.card-tools button:hover { background: #1b213016; }
+.card-stamp { top: auto; bottom: 70px; left: 30px; background: var(--paper); }
+.card-stamp.stamp-later { right: 30px; }
+.deck-controls { max-width: 500px; padding: 0 0 6px; }
+.btn-later, .btn-done { min-width: 120px; border-radius: 13px; }
+.btn-done { box-shadow: 0 6px 18px -8px #2fbf8f77; }
+.deck-hint { display: flex; justify-content: center; gap: 16px; font-size: .67rem; }
+.add-form { margin-top: 24px; padding-top: 20px; border-top: 1px solid #ffffff12; }
+.composer-label { display: flex; justify-content: space-between; align-items: center; color: var(--text); font-size: .76rem; font-weight: 600; margin-bottom: 11px; }
+.composer-label span { font-weight: 400; font-size: .7rem; color: var(--faint); }
+.add-slip { border-radius: 13px; background: #111b24; padding: 10px 12px; gap: 8px; }
+#new-title { font-weight: 550; }
+#add-button { min-width: 110px; }
+#deck-view, #spread-view { view-transition-name: workspace; }
+::view-transition-old(workspace) { animation: workspace-out .12s ease both; }
+::view-transition-new(workspace) { animation: workspace-in .18s ease both; }
+@keyframes workspace-out { to { opacity: 0; transform: translateY(-5px); } }
+@keyframes workspace-in { from { opacity: 0; transform: translateY(6px); } }
+@media(min-width: 800px) { body { padding-top: 34px; } }
+@media(max-width: 560px) {
+ body { padding: 20px 18px 28px; }
+ .header h1 { font-size: 2.1rem; }
+ .header { margin-bottom: 22px; }
+ .sync-status { margin-bottom: 18px; }
+ .desk-toolbar { padding: 10px 0; margin-bottom: 14px; }
+ .desk-toolbar > div { font-size: .74rem; gap: 6px; }
+ .workspace-count { font-size: .66rem; padding-left: 8px; margin-left: 0; }
+ .desk-toolbar .view-toggle { font-size: .7rem; padding: 6px 9px; gap: 6px; }
+ .deck-stage { height: 305px; }
+ .card { height: 264px; padding: 22px 20px 16px; }
+ .card-title { font-size: 1.5rem; }
+ .card-index { margin-bottom: 16px; }
+ .deck-hint { display: none; }
+ .btn-later, .btn-done { min-width: 0; }
+ .add-form { margin-top: 19px; padding-top: 16px; }
+ .add-slip { padding: 9px; }
+ .add-inputs { gap: 0; }
+ .add-inputs input { padding: 8px 9px; }
+ .card-stamp { bottom: 65px; }
+}
+@media (min-width: 800px) and (max-height: 820px) {
+ body { padding-top: 20px; padding-bottom: 24px; }
+ .header { margin-bottom: 16px; }
+ .header h1 { font-size: 2.35rem; }
+ .sync-status { margin-bottom: 14px; }
+ .desk-toolbar { padding: 8px 0; margin-bottom: 10px; }
+ .deck-stage { height: 310px; }
+ .card { height: 278px; }
+ .add-form { margin-top: 16px; padding-top: 14px; }
+}
