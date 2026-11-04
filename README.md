@@ -142,6 +142,13 @@ npx wrangler deploy
 
 `wrangler.toml` keeps a placeholder `database_id` on purpose: replace it with the id from your own `wrangler d1 create`.
 
+### Deploy checklist (learned the hard way)
+
+On 2026-11-05 a deploy built its config from scratch instead of from `wrangler.toml` and dropped the `[assets]` block. The worker deployed fine, but the frontend returned "Internal server error" until a corrected config was deployed (~15 seconds of outage). Two rules came out of it:
+
+1. **Build any temporary deploy config from `wrangler.toml`** (e.g. `sed` the real `database_id` in), never from a minimal skeleton. The `[assets]` block and every other base setting must survive.
+2. **Smoke-check the frontend right after every deploy**, not just the API: `curl -s <url>/` returns the app HTML, `styles.css` and `app.js` serve the current build, and the API regression suite passes. An API-only check would have called the broken deploy green.
+
 ## Project structure
 
 ```
