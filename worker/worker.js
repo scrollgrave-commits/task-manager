@@ -50,6 +50,7 @@ function rowToTask(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at || null,
+    completedAtEstimated: row.completed_at_estimated === 1,
   };
 }
 
@@ -115,10 +116,14 @@ async function handleApi(request, env, url) {
       const now = new Date().toISOString();
       const completedNow = body.completed !== undefined ? body.completed : existing.completed;
       // Stamp the moment a card is finished; clear it if it is reopened.
+      // A stamp written here is exact (estimated = 0); a kept legacy stamp
+      // keeps its estimated flag.
       const completedAt = body.completed === undefined ? existing.completedAt
         : (body.completed ? (existing.completed ? existing.completedAt : now) : null);
+      const completedAtEstimated = body.completed === undefined ? existing.completedAtEstimated
+        : (body.completed ? (existing.completed ? existing.completedAtEstimated : false) : false);
       await db
-        .prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ? WHERE id = ?')
+        .prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ?, completed_at_estimated = ? WHERE id = ?')
         .bind(
           body.title !== undefined ? body.title.trim() : existing.title,
           body.description !== undefined ? body.description.trim() : existing.description,
@@ -126,6 +131,7 @@ async function handleApi(request, env, url) {
           body.sort_order !== undefined ? body.sort_order : existing.sortOrder,
           now,
           completedAt,
+          completedAtEstimated ? 1 : 0,
           id,
         )
         .run();

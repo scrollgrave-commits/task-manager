@@ -6,5 +6,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   sort_order  REAL,
   created_at  TEXT    NOT NULL,
   updated_at  TEXT    NOT NULL,
-  completed_at TEXT
+  completed_at TEXT,
+  completed_at_estimated INTEGER NOT NULL DEFAULT 0
 );

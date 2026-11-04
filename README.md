@@ -243,7 +243,10 @@ every finished card, because completion bumped the same timestamp as a content
 change. The API now stamps `completedAt` the moment a card is done (and clears
 it if the card is reopened), so completed cards read "Done ..." instead, and
 "edited" only appears for true content edits. Existing databases gain the
-column through an additive migration. Cards completed before the column existed
-are backfilled from their last update: that equals the true completion time only
-when finishing was the last change to the card, so legacy stamps are estimates -
-only completions from this version on are recorded exactly.
+column through an additive migration. Stamps carry provenance: cards completed
+before tracking existed are backfilled from their last update (exact only if
+finishing was the last change to the card) and are marked estimated - the API
+returns `completedAtEstimated: true` for them and the UI reads "Done around ..."
+instead of "Done ...". Completions from this version on are recorded exactly.
+The one-time flip happens only in the moment the migration column is first
+added, so restarts never mislabel a fresh exact stamp.

@@ -243,7 +243,10 @@ function sortTasks() { state.tasks.sort((a, b) => Number(a.completed) - Number(b
 // Meta line: when a card joined, when it was done, and true content edits.
 function cardMeta(task) {
   const parts = [`Added ${formatDate(task.createdAt)}`];
-  if (task.completed && task.completedAt) parts.push(`Done ${formatDate(task.completedAt)}`);
+  if (task.completed && task.completedAt) {
+    // Legacy stamps (before completion tracking) are estimates; say so.
+    parts.push(task.completedAtEstimated ? `Done around ${formatDate(task.completedAt)}` : `Done ${formatDate(task.completedAt)}`);
+  }
   if (task.updatedAt !== task.createdAt && task.updatedAt !== task.completedAt) parts.push(`edited ${formatDate(task.updatedAt)}`);
   return parts.join(' · ');
 }

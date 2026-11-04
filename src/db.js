@@ -26,14 +26,32 @@ try {
 // Backfill so existing cards keep their creation order in the deck.
 db.exec("UPDATE tasks SET sort_order = CAST(strftime('%s', created_at) AS REAL) WHERE sort_order IS NULL");
 
-// Databases created before completion tracking get the column too.
+// Databases created before completion tracking get the columns too.
+let addedCompletedAt = false;
 try {
   db.exec('ALTER TABLE tasks ADD COLUMN completed_at TEXT');
+  addedCompletedAt = true;
 } catch (err) {
   if (!String(err.message).includes('duplicate column')) throw err;
 }
-// Cards already done were completed at their last update.
-db.exec('UPDATE tasks SET completed_at = updated_at WHERE completed = 1 AND completed_at IS NULL');
+let addedEstimated = false;
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN completed_at_estimated INTEGER NOT NULL DEFAULT 0');
+  addedEstimated = true;
+} catch (err) {
+  if (!String(err.message).includes('duplicate column')) throw err;
+}
+// These run only in the moment a column is first added, never on later boots:
+// a fresh exact stamp would otherwise be misread as legacy on every restart.
+if (addedCompletedAt) {
+  // Legacy rows: the card's last update time stands in as an ESTIMATE of
+  // completion (exact only if finishing was the last change to the card).
+  db.exec('UPDATE tasks SET completed_at = updated_at WHERE completed = 1 AND completed_at IS NULL');
+}
+if (addedEstimated) {
+  // Every stamp existing at this moment predates exact tracking.
+  db.exec('UPDATE tasks SET completed_at_estimated = 1 WHERE completed_at IS NOT NULL');
+}
 
 function rowToTask(row) {
   return {
@@ -45,6 +63,7 @@ function rowToTask(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at || null,
+    completedAtEstimated: row.completed_at_estimated === 1,
   };
 }
 
@@ -80,11 +99,15 @@ function updateTask(id, { title, description, completed, sort_order }) {
     completed: completed !== undefined ? (completed ? 1 : 0) : (existing.completed ? 1 : 0),
     sortOrder: sort_order !== undefined ? sort_order : existing.sortOrder,
     // Stamp the moment a card is finished; clear it if it is reopened.
+    // A stamp written here is exact (estimated = 0); a kept legacy stamp keeps
+    // its estimated flag.
     completedAt: completed === undefined ? existing.completedAt
       : (completed ? (existing.completed ? existing.completedAt : now) : null),
+    completedAtEstimated: completed === undefined ? existing.completedAtEstimated
+      : (completed ? (existing.completed ? existing.completedAtEstimated : false) : false),
   };
-  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ? WHERE id = ?')
-    .run(next.title, next.description, next.completed, next.sortOrder, now, next.completedAt, id);
+  db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ?, completed_at_estimated = ? WHERE id = ?')
+    .run(next.title, next.description, next.completed, next.sortOrder, now, next.completedAt, next.completedAtEstimated ? 1 : 0, id);
   return getTask(id);
 }
 
