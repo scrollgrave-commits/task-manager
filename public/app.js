@@ -47,19 +47,41 @@ function formatDate(iso) {
     ', ' + new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-/* ---------- toast (with optional Undo) ---------- */
-let toastTimer = null;
+/* ---------- toasts (stacked, each with its own timer and optional Undo) ----------
+   Loop 14: a second action no longer kills the first one's undo window -
+   complete one card and delete another right after, and both can be undone. */
 function showToast(message, { error = false, action = null, onAction = null } = {}) {
-  const toast = $('#toast');
-  const actionBtn = $('#toast-action');
-  toast.classList.toggle('error', error);
-  $('#toast-message').textContent = message;
-  actionBtn.hidden = !action;
-  actionBtn.textContent = action || '';
-  actionBtn.onclick = onAction;
-  toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.hidden = true; }, action ? 5000 : 2600);
+  const stack = $('#toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast' + (error ? ' error' : '');
+  el.setAttribute('role', error ? 'alert' : 'status');
+  const dot = document.createElement('span');
+  dot.className = 'toast-dot';
+  dot.setAttribute('aria-hidden', 'true');
+  const msg = document.createElement('span');
+  msg.className = 'toast-message';
+  msg.textContent = message;
+  el.append(dot, msg);
+  let timer = null;
+  const dismiss = () => {
+    clearTimeout(timer);
+    if (!el.isConnected) return;
+    if (reduceMotion) { el.remove(); return; }
+    el.classList.add('toast-out');
+    setTimeout(() => el.remove(), 180);
+  };
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = action;
+    btn.onclick = () => { dismiss(); onAction && onAction(); };
+    el.appendChild(btn);
+  }
+  stack.appendChild(el);
+  while (stack.children.length > 3) stack.firstElementChild.remove();
+  timer = setTimeout(dismiss, action ? 5000 : 2600);
+  return dismiss;
 }
 
 /* ---------- springs (stiffness/damping integration, interruptible) ---------- */
@@ -309,7 +331,6 @@ async function commitFling(task, outcome) {
 
 async function undoDone(id) {
   if (pendingTasks.has(id)) return;
-  $('#toast').hidden = true;
   const task = state.tasks.find(t => t.id === id);
   if (!task) return;
   pendingTasks.set(id, { completed: false }); updateDeckControls();
@@ -325,7 +346,6 @@ async function undoDone(id) {
    stamp with its provenance flag, so an estimated stamp stays estimated.
    The restored card is a new row: its Added stamp starts fresh. */
 async function restoreTask(snapshot) {
-  $('#toast').hidden = true;
   try {
     const created = await createTask(snapshot.title, snapshot.description);
     const fields = { sort_order: snapshot.sortOrder };

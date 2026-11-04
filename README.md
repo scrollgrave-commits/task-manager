@@ -155,6 +155,14 @@ position announced in the label. This extends the same direct-manipulation model
 the deck's swipe-to-complete and reuses Koch's principles; the reorder is
 interruptible and the reduced-motion path applies it instantly.
 
+**Every action keeps its own undo window.**
+Toasts now stack instead of replacing each other: complete one card and delete
+another a second later, and both stay undoable for their full five seconds - the
+second action no longer kills the first one's chance to come back. Each toast in
+the stack carries its own timer and its own Undo, plain messages still clear on a
+shorter clock, the stack caps at three with the oldest dropping off, and dismissed
+toasts settle out with a short fade (instant under reduced motion).
+
 ## Deployment (Cloudflare Workers + D1)
 
 The app also ships a Workers port in `worker/` (same REST contract as `server.js`, D1 instead of the local SQLite file).
