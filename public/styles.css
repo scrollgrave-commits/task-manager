@@ -516,8 +516,11 @@ body { overflow-x: hidden; }
 .task-desc { color: var(--ink-soft); font-size: 0.86rem; }
 .task-foot {
   margin-top: 12px; padding-top: 9px; border-top: 1px dashed #d6d0c0;
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  /* Loop 10: stack meta above actions - three buttons squeezed the meta into
+     two-line wraps with orphaned fragments. */
+  display: flex; flex-direction: column; align-items: stretch; gap: 7px;
 }
+.task-foot .task-actions { justify-content: flex-end; }
 .task-meta { color: var(--ink-faint); font-size: 0.7rem; font-weight: 500; margin-top: 0; line-height: 1.45; }
 .task-actions { gap: 6px; }
 .task-actions button {

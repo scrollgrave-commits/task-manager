@@ -269,3 +269,7 @@ so they never fight each other. Touch and reduced-motion users get the flat,
 stable spread. Picking up also has an explicit Pick up button on every active
 card - keyboard reachable - and a click that ends a text selection never moves
 a card.
+
+**Spread card footers stack.**
+The card meta line sits on its own row above the action buttons, so added/done
+stamps never wrap into orphaned fragments when all three actions are present.
