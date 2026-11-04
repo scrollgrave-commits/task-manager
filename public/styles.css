@@ -488,9 +488,12 @@ body { overflow-x: hidden; }
   transition: transform 0.35s var(--springy), box-shadow 0.3s ease, opacity 0.3s ease;
 }
 .task:not(.completed) { cursor: pointer; }
-.task:nth-child(odd) { transform: rotate(-0.5deg); }
-.task:nth-child(even) { transform: rotate(0.45deg); }
-.task:hover { transform: rotate(0deg) translateY(-3px); box-shadow: 1px 2px 0 0 var(--paper-edge), 2px 4px 0 0 #d8d1bd, 0 2px 3px rgba(0,0,0,0.3), 0 18px 34px -14px rgba(0,0,0,0.6); z-index: 1; }
+/* Loop 9: resting rotation, hover lift and cursor lean compose through custom
+   properties so the tilt never fights the straighten-on-hover. */
+.task { transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) rotate(var(--rest, 0deg)) translateY(var(--lift, 0px)); }
+.task:nth-child(odd) { --rest: -0.5deg; }
+.task:nth-child(even) { --rest: 0.45deg; }
+.task:hover { --rest: 0deg; --lift: -3px; box-shadow: 1px 2px 0 0 var(--paper-edge), 2px 4px 0 0 #d8d1bd, 0 2px 3px rgba(0,0,0,0.3), 0 18px 34px -14px rgba(0,0,0,0.6); z-index: 1; }
 .task.deal-in { animation: spread-in 0.5s var(--settle) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
 @keyframes spread-in { from { opacity: 0; transform: translateY(18px) rotate(2.5deg) scale(0.96); } }
 

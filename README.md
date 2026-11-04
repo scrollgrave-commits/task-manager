@@ -260,3 +260,12 @@ spread picks it up - it jumps to the top of the focus deck so you can act on it
 immediately. Completed cards stay put, an open edit form absorbs its own clicks,
 and the move is optimistic with the same rollback discipline as a swipe. The
 deck edge stays flat under reduced motion and adds no work to first paint.
+
+**Cards lean toward the cursor.**
+On fine pointers, a spread card tilts a few degrees toward the cursor (same
+Tactile Card Stack reference as above) and settles back when the cursor leaves.
+Resting rotation, hover lift and the lean compose through CSS custom properties
+so they never fight each other. Touch and reduced-motion users get the flat,
+stable spread. Picking up also has an explicit Pick up button on every active
+card - keyboard reachable - and a click that ends a text selection never moves
+a card.

@@ -17,6 +17,7 @@ let deckAnimating = false;
 let spreadDealIn = false;   // deal the spread in only when the view or filter changes
 let lastAddedId = null;      // a freshly dealt card animates on its own
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const finePointer = matchMedia('(pointer: fine)').matches;
 
 /* ---------- API ---------- */
 async function api(path, options = {}) {
@@ -409,6 +410,7 @@ function renderSpread() {
         <div class="task-foot">
           <p class="task-meta">${cardMeta(task)}</p>
           <div class="task-actions">
+            ${task.completed ? '' : '<button type="button" class="pickup-task" title="Bring this card to the top of the deck">Pick up</button>'}
             <button type="button" class="edit-task">Edit</button>
             <button type="button" class="delete-task">Delete</button>
           </div>
@@ -420,6 +422,28 @@ function renderSpread() {
   });
   spreadDealIn = false;
   lastAddedId = null;
+}
+
+/* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
+   reduced motion (reference: Tactile Card Stack, antjanus.com/page-designs/card-stack). */
+if (finePointer && !reduceMotion) {
+  const list = $('#task-list');
+  list.addEventListener('pointermove', (e) => {
+    const li = e.target.closest('.task');
+    if (!li) return;
+    const r = li.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    li.style.setProperty('--ry', (px * 6).toFixed(2) + 'deg');
+    li.style.setProperty('--rx', (-py * 6).toFixed(2) + 'deg');
+  });
+  list.addEventListener('pointerout', (e) => {
+    const li = e.target.closest('.task');
+    if (li && !li.contains(e.relatedTarget)) {
+      li.style.removeProperty('--rx');
+      li.style.removeProperty('--ry');
+    }
+  });
 }
 
 $('#task-list').addEventListener('click', async (e) => {
@@ -490,9 +514,14 @@ $('#task-list').addEventListener('click', async (e) => {
     return;
   }
 
+  if (e.target.closest('.pickup-task')) { pullToTop(task); return; }
+
   // Loop 8: click anywhere else on an active card picks it up - top of the focus deck.
-  // Completed cards stay put; an open edit form absorbs its own clicks.
+  // Completed cards stay put; an open edit form absorbs its own clicks; a click that
+  // ends a text selection is reading, not picking up.
   if (task.completed || e.target.closest('.task-edit')) return;
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return;
   pullToTop(task);
 });
 
