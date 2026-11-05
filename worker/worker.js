@@ -196,30 +196,79 @@ async function handleApi(request, env, url) {
   return fail('Not found', 404);
 }
 
-// Loop 22: optional passphrase lock. When the DECK_PASSPHRASE secret is set,
-// every /api/* call must send it as x-deck-key; unset means open (local dev
-// parity). Static assets stay public - the app's code is open source; the
-// cards behind the API are what the lock protects.
+// Loop 22: optional passphrase lock with expiring cookie sessions. POST
+// /api/unlock {passphrase} validates against the DECK_PASSPHRASE secret and
+// sets a 30-day Secure/HttpOnly/SameSite=Lax session cookie (random token,
+// only its hash is stored in D1). Every other /api/* call needs that cookie.
+// The raw passphrase never touches storage, URLs, logs or responses; JS never
+// sees the session cookie. Unset secret = open (local dev parity). Static
+// assets stay public - the app's code is open source; the cards behind the
+// API are what the lock protects.
+const SESSION_MAX_AGE = 30 * 24 * 3600; // 30 days, matching the approved device unlock
+
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function deckKeyOk(key, expected) {
   if (!key || !expected) return false;
-  const enc = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest('SHA-256', enc.encode(key)),
-    crypto.subtle.digest('SHA-256', enc.encode(expected)),
-  ]);
-  const x = new Uint8Array(a), y = new Uint8Array(b);
+  const [a, b] = await Promise.all([sha256Hex(key), sha256Hex(expected)]);
   let d = 0;
-  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
-  return d === 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0 && a.length === b.length;
+}
+
+async function handleUnlock(request, env) {
+  if (!env.DECK_PASSPHRASE) return fail('The deck is not locked', 400);
+  let body;
+  try { body = await request.json(); } catch { return fail('request body must be valid JSON', 400); }
+  if (typeof body?.passphrase !== 'string' || !(await deckKeyOk(body.passphrase, env.DECK_PASSPHRASE))) {
+    return json({ error: 'The deck is locked' }, 401);
+  }
+  const db = env.DB;
+  await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)').run();
+  const now = new Date();
+  await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now.toISOString()).run();
+  const token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const exp = new Date(now.getTime() + SESSION_MAX_AGE * 1000);
+  await db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
+    .bind(await sha256Hex(token), now.toISOString(), exp.toISOString()).run();
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `deck_session=${token}; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}; Path=/`,
+    },
+  });
+}
+
+async function deckSessionOk(request, env, url) {
+  // CSRF guard for cookie-authenticated mutations: our own origin only.
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    const origin = request.headers.get('Origin');
+    if (origin && new URL(origin).host !== url.host) return 'forbidden';
+  }
+  const m = /(?:^|;\s*)deck_session=([a-f0-9]{64})/.exec(request.headers.get('Cookie') || '');
+  if (!m) return false;
+  const row = await env.DB.prepare('SELECT expires_at FROM sessions WHERE token_hash = ?')
+    .bind(await sha256Hex(m[1])).first().catch(() => null);
+  return !!(row && row.expires_at > new Date().toISOString());
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
+      if (url.pathname === '/api/unlock') {
+        if (request.method !== 'POST') return fail('Method not allowed', 405);
+        return await handleUnlock(request, env);
+      }
       if (url.pathname.startsWith('/api/')) {
-        if (env.DECK_PASSPHRASE && !(await deckKeyOk(request.headers.get('x-deck-key'), env.DECK_PASSPHRASE))) {
-          return json({ error: 'The deck is locked' }, 401);
+        if (env.DECK_PASSPHRASE) {
+          const ok = await deckSessionOk(request, env, url);
+          if (ok === 'forbidden') return json({ error: 'Forbidden' }, 403);
+          if (!ok) return json({ error: 'The deck is locked' }, 401);
         }
         return await handleApi(request, env, url);
       }

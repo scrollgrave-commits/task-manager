@@ -24,13 +24,12 @@ const finePointer = matchMedia('(pointer: fine)').matches;
 
 /* ---------- API ---------- */
 async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  const key = localStorage.getItem('the-deck:key');   // Loop 22: passphrase lock
-  if (key) headers['x-deck-key'] = key;
+  // Loop 22: sessions ride in an HttpOnly cookie, so no key header here;
+  // the raw passphrase never enters JS storage.
   const res = await fetch(path, {
     signal: AbortSignal.timeout(12000),
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
-    headers,
   });
   if (res.status === 401) {
     showLock();
@@ -66,15 +65,19 @@ function showLock(errorMsg) {
   lockEl.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = lockEl.querySelector('input');
-    const v = input.value.trim();
-    if (!v) return;
-    localStorage.setItem('the-deck:key', v);
-    input.value = '';
+    const v = input.value;
+    input.value = '';   // the passphrase is used once and never stored
+    if (!v.trim()) return;
     try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passphrase: v }),
+      });
+      if (!res.ok) throw new Error('locked');
       await refresh();
       hideLock();
     } catch (err) {
-      localStorage.removeItem('the-deck:key');
       showLock('That passphrase did not work. Try again.');
     }
   });

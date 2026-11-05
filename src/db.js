@@ -6,6 +6,11 @@ const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(path.join(__dirname, '..', 'tasks.db'));
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tasks (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT    NOT NULL,
@@ -124,4 +129,23 @@ function deleteTask(id) {
   return result.changes > 0;
 }
 
-module.exports = { listTasks, getTask, createTask, updateTask, deleteTask };
+
+/* Loop 22: passphrase-lock sessions. Only token hashes are stored, with a
+   30-day expiry; expired rows are cleaned up lazily on unlock. */
+const SESSION_MAX_AGE_MS = 30 * 24 * 3600 * 1000;
+
+function createSession(tokenHash) {
+  const now = new Date();
+  const exp = new Date(now.getTime() + SESSION_MAX_AGE_MS);
+  db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now.toISOString());
+  db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
+    .run(tokenHash, now.toISOString(), exp.toISOString());
+  return exp.toISOString();
+}
+
+function sessionValid(tokenHash) {
+  const row = db.prepare('SELECT expires_at FROM sessions WHERE token_hash = ?').get(tokenHash);
+  return !!(row && row.expires_at > new Date().toISOString());
+}
+
+module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, createSession, sessionValid };

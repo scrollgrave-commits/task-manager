@@ -63,7 +63,7 @@ Base URL: `http://localhost:3000/api/tasks`
 | PUT    | `/:id`               | Edit `title`/`description`, set `completed`, set `sort_order` (deck position), and/or reattach a completion stamp with `completed_at` + `completed_at_estimated` (requires the task to be completed) | 200 | 400, 404   |
 | DELETE | `/:id`               | Delete a task                      | 204     | 400, 404        |
 
-When the optional passphrase lock is enabled (see "Passphrase lock" below), every `/api/*` call without a valid `x-deck-key` header returns 401. |
+When the optional passphrase lock is enabled (see "Passphrase lock" below), `/api/*` calls without a valid session cookie return 401; `POST /api/unlock` exchanges the passphrase for the cookie. |
 
 All responses are JSON. Errors return `{ "error": "message" }`.
 
@@ -380,13 +380,15 @@ without an explicit stamp still re-stamps the update time.
 ### Passphrase lock
 
 The Deck can run locked: set the `DECK_PASSPHRASE` environment variable
-(locally) or Worker secret (`wrangler secret put DECK_PASSPHRASE`) and every
-`/api/*` request must carry it as an `x-deck-key` header - anything else gets
-a 401 before routing. The frontend asks for the passphrase on a lock screen,
-stores it in the browser's localStorage, and sends the header on every call; a
-wrong passphrase clears itself and asks again. Static assets stay public (the
-code is open source) - the lock protects the cards, not the bundle. Unset, the
-API is open, so local development and the original assignment behavior are
+(locally) or Worker secret (`wrangler secret put DECK_PASSPHRASE`). A lock
+screen then asks for the passphrase once; `POST /api/unlock` checks it against
+the secret (constant-time hash comparison) and sets a 30-day
+`Secure; HttpOnly; SameSite=Lax` session cookie whose token is stored only as
+a hash in the database. Every other `/api/*` request needs that cookie -
+anything else gets a 401 - and cookie-authenticated mutations are rejected
+cross-origin. The raw passphrase never touches browser storage, URLs, logs,
+source or response bodies. Static assets stay public (the code is open
+source) - the lock protects the cards, not the bundle. Unset, the API is
+open, so local development and the original assignment behavior are
 unchanged; removing the secret makes the deployment public again without a
-code change. Comparison is hash-based and constant-time on both the Express
-and Worker paths.
+code change.
