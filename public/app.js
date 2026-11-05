@@ -90,6 +90,10 @@ function showLock(errorMsg) {
     // button sleeps until the answer comes back; and each failure kind gets
     // its own honest message instead of blaming the passphrase.
     btn.disabled = true;
+    // Loop 25: an old error must not sit there implying the new attempt
+    // already failed - clear it and say what is happening instead.
+    lockEl.querySelector('.lock-error').textContent = '';
+    btn.textContent = 'Unlocking...';
     try {
       const res = await fetch('/api/unlock', {
         method: 'POST',
@@ -114,6 +118,7 @@ function showLock(errorMsg) {
       showLock('Cannot reach the deck. Check your connection and try again.');
     } finally {
       btn.disabled = false;
+      btn.textContent = 'Unlock deck';
     }
   });
   document.body.appendChild(lockEl);
