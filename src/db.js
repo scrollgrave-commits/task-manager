@@ -11,6 +11,10 @@ db.exec(`
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS unlock_attempts (
+    ip_hash TEXT NOT NULL,
+    ts      TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS tasks (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT    NOT NULL,
@@ -148,4 +152,19 @@ function sessionValid(tokenHash) {
   return !!(row && row.expires_at > new Date().toISOString());
 }
 
-module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, createSession, sessionValid };
+/* Loop 22: bounded backoff for online guessing - failed unlocks per client-IP
+   hash inside a 15-minute window. Only IP hashes are stored. */
+function pruneUnlockAttempts(sinceIso) {
+  db.prepare('DELETE FROM unlock_attempts WHERE ts < ?').run(sinceIso);
+}
+function countUnlockAttempts(ipHash) {
+  return db.prepare('SELECT COUNT(*) AS n FROM unlock_attempts WHERE ip_hash = ?').get(ipHash).n;
+}
+function recordUnlockAttempt(ipHash) {
+  db.prepare('INSERT INTO unlock_attempts (ip_hash, ts) VALUES (?, ?)').run(ipHash, new Date().toISOString());
+}
+function clearUnlockAttempts(ipHash) {
+  db.prepare('DELETE FROM unlock_attempts WHERE ip_hash = ?').run(ipHash);
+}
+
+module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, createSession, sessionValid, pruneUnlockAttempts, countUnlockAttempts, recordUnlockAttempt, clearUnlockAttempts };

@@ -3,8 +3,8 @@
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...extraHeaders } });
 }
 function fail(message, status) {
   return json({ error: message }, status);
@@ -219,16 +219,31 @@ async function deckKeyOk(key, expected) {
   return d === 0 && a.length === b.length;
 }
 
+// Bounded backoff for online guessing: 10 failed unlocks per 15 minutes per
+// client-IP hash, then 429 with Retry-After. Only hashes of IPs are stored.
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+
 async function handleUnlock(request, env) {
   if (!env.DECK_PASSPHRASE) return fail('The deck is not locked', 400);
   let body;
   try { body = await request.json(); } catch { return fail('request body must be valid JSON', 400); }
-  if (typeof body?.passphrase !== 'string' || !(await deckKeyOk(body.passphrase, env.DECK_PASSPHRASE))) {
-    return json({ error: 'The deck is locked' }, 401);
-  }
   const db = env.DB;
   await db.prepare('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS unlock_attempts (ip_hash TEXT NOT NULL, ts TEXT NOT NULL)').run();
   const now = new Date();
+  const windowStart = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString();
+  const ipHash = await sha256Hex(request.headers.get('CF-Connecting-IP') || 'unknown');
+  await db.prepare('DELETE FROM unlock_attempts WHERE ts < ?').bind(windowStart).run();
+  const attempts = await db.prepare('SELECT COUNT(*) AS n FROM unlock_attempts WHERE ip_hash = ?').bind(ipHash).first();
+  if ((attempts?.n || 0) >= MAX_ATTEMPTS) {
+    return json({ error: 'Too many attempts. Try again later.' }, 429, { 'Retry-After': '900' });
+  }
+  if (typeof body?.passphrase !== 'string' || !(await deckKeyOk(body.passphrase, env.DECK_PASSPHRASE))) {
+    await db.prepare('INSERT INTO unlock_attempts (ip_hash, ts) VALUES (?, ?)').bind(ipHash, now.toISOString()).run();
+    return json({ error: 'The deck is locked' }, 401);
+  }
+  await db.prepare('DELETE FROM unlock_attempts WHERE ip_hash = ?').bind(ipHash).run();
   await db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now.toISOString()).run();
   const token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
   const exp = new Date(now.getTime() + SESSION_MAX_AGE * 1000);
@@ -245,9 +260,15 @@ async function handleUnlock(request, env) {
 
 async function deckSessionOk(request, env, url) {
   // CSRF guard for cookie-authenticated mutations: our own origin only.
+  // Exact origin comparison: scheme + host + port must all match the request's
+  // own origin. A malformed Origin is forbidden, not silently skipped.
   if (!['GET', 'HEAD'].includes(request.method)) {
     const origin = request.headers.get('Origin');
-    if (origin && new URL(origin).host !== url.host) return 'forbidden';
+    if (origin) {
+      let o;
+      try { o = new URL(origin).origin; } catch { return 'forbidden'; }
+      if (o !== url.origin) return 'forbidden';
+    }
   }
   const m = /(?:^|;\s*)deck_session=([a-f0-9]{64})/.exec(request.headers.get('Cookie') || '');
   if (!m) return false;

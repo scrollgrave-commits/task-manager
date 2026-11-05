@@ -385,10 +385,16 @@ screen then asks for the passphrase once; `POST /api/unlock` checks it against
 the secret (constant-time hash comparison) and sets a 30-day
 `Secure; HttpOnly; SameSite=Lax` session cookie whose token is stored only as
 a hash in the database. Every other `/api/*` request needs that cookie -
-anything else gets a 401 - and cookie-authenticated mutations are rejected
-cross-origin. The raw passphrase never touches browser storage, URLs, logs,
+anything else gets a 401 - and cookie-authenticated mutations require an
+Origin exactly matching the app's own origin (scheme, host and port). Failed
+unlock attempts are limited to 10 per 15 minutes per client-IP hash (429 with
+Retry-After beyond that); only IP hashes are stored. The raw passphrase never touches browser storage, URLs, logs,
 source or response bodies. Static assets stay public (the code is open
 source) - the lock protects the cards, not the bundle. Unset, the API is
 open, so local development and the original assignment behavior are
 unchanged; removing the secret makes the deployment public again without a
-code change.
+code change. Rotation semantics, precisely: replacing the secret does NOT
+invalidate sessions already issued (they stay valid until their 30-day
+expiry; clear the `sessions` table to force re-unlock), and removing the
+secret disables the lock entirely - that open path is the recovery mechanism
+if the passphrase is lost, so treat the secret like the only copy of a key.
