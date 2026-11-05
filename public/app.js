@@ -46,8 +46,12 @@ const activeTasks = () => state.tasks.filter((t) => !t.completed);
 const completedTasks = () => state.tasks.filter((t) => t.completed);
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-    ', ' + new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const d = new Date(iso);
+  // Loop 19: stamps from another year say so - "Nov 4" is ambiguous a year on
+  const opts = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('en-US', opts) +
+    ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 /* ---------- toasts (stacked, each with its own timer and optional Undo) ----------
@@ -1095,8 +1099,10 @@ function renderProgress() {
 }
 
 /* ---------- boot ---------- */
+let lastSyncAt = 0;
 async function refresh() {
   const tasks = await getTasks();
+  lastSyncAt = Date.now();
   // Preserve optimistic records if an independent CRUD refresh overlaps a save.
   state.tasks = tasks.map(t => pendingTasks.has(t.id) ? (state.tasks.find(local => local.id === t.id) || t) : t);
   sortTasks();
@@ -1105,6 +1111,16 @@ async function refresh() {
   renderSpread();
   renderProgress();
 }
+
+// Loop 19: a tab left open in the background re-syncs when it becomes visible
+// again, so a second device or a stale tab never edits against old cards.
+// Never clobber an open form or a save in flight; stay silent when offline.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (state.editingCard || pendingTasks.size || document.querySelector('#task-list form')) return;
+  if (Date.now() - lastSyncAt < 30000) return;
+  refresh().catch(() => {});
+});
 
 $('#today').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 applyView();
