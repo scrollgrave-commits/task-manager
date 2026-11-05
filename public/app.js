@@ -333,7 +333,10 @@ async function commitFling(task, outcome) {
     if (outcome === 'done') showToast(`Completed "${task.title}"`, {
       action: 'Undo', onAction: () => undoDone(task.id),
     });
-    else showToast(`Sent "${task.title}" to the back`);
+    // Loop 17: a mis-swipe left buries the top card; let it come straight back
+    else showToast(`Sent "${task.title}" to the back`, {
+      action: 'Undo', onAction: () => undoLater(task.id, previous.sortOrder),
+    });
   } catch (err) {
     pendingTasks.delete(task.id);
     const current = state.tasks.find(t => t.id === task.id);
@@ -346,6 +349,18 @@ async function commitFling(task, outcome) {
     showToast('Could not confirm the change. Card restored; checking the server.', { error: true });
     try { await refresh(); } catch { showToast('Connection lost. Change not confirmed. Reconnect and reload before trying again.', { error: true }); }
   }
+}
+
+async function undoLater(id, prevSort) {
+  if (pendingTasks.has(id)) return;
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) { showToast('That card is already gone - nothing to undo.'); return; }
+  pendingTasks.set(id, { sort_order: prevSort }); updateDeckControls();
+  try {
+    const saved = await updateTask(id, { sort_order: prevSort });
+    Object.assign(task, saved); pendingTasks.delete(id); sortTasks(); paintState();
+    showToast(`Brought "${task.title}" back to the front`);
+  } catch (err) { pendingTasks.delete(id); updateDeckControls(); showToast(err.message, { error: true }); }
 }
 
 async function undoDone(id) {
@@ -423,9 +438,13 @@ function openCardEdit(card, task) {
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
   });
-  form.querySelector('.cancel-edit').addEventListener('click', async () => {
+  const closeDeckEdit = async () => {
     state.editingCard = false;
     await refresh();
+  };
+  form.querySelector('.cancel-edit').addEventListener('click', closeDeckEdit);
+  form.addEventListener('keydown', (e) => { // Loop 17: Escape backs out of an edit
+    if (e.key === 'Escape') { e.preventDefault(); closeDeckEdit(); }
   });
 }
 
@@ -919,6 +938,9 @@ $('#task-list').addEventListener('click', async (e) => {
       } catch (err) { showToast(err.message, { error: true }); }
     });
     form.querySelector('.cancel-edit').addEventListener('click', () => refresh());
+    form.addEventListener('keydown', (e) => { // Loop 17: Escape backs out of an edit
+      if (e.key === 'Escape') { e.preventDefault(); refresh(); }
+    });
     return;
   }
 
@@ -932,9 +954,16 @@ $('#task-list').addEventListener('click', async (e) => {
     }
     try {
       const snapshot = { ...task };
+      // Loop 17: keep keyboard users placed - remember the card after this one
+      const li = delBtn.closest('.task');
+      const neighbour = (li.nextElementSibling ?? li.previousElementSibling)?.querySelector('.task-title')?.textContent;
       await deleteTask(task.id);
       showToast(`Deleted "${task.title}"`, { action: 'Undo', onAction: () => restoreTask(snapshot) });
       await refresh();
+      if (neighbour && document.activeElement === document.body) {
+        const next = [...document.querySelectorAll('#task-list .task')].find(l => l.querySelector('.task-title').textContent === neighbour);
+        next?.querySelector('.delete-task')?.focus();
+      }
     } catch (err) { showToast(err.message, { error: true }); }
     return;
   }
