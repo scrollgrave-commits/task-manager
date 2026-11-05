@@ -24,16 +24,64 @@ const finePointer = matchMedia('(pointer: fine)').matches;
 
 /* ---------- API ---------- */
 async function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const key = localStorage.getItem('the-deck:key');   // Loop 22: passphrase lock
+  if (key) headers['x-deck-key'] = key;
   const res = await fetch(path, {
     signal: AbortSignal.timeout(12000),
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
+  if (res.status === 401) {
+    showLock();
+    const err = new Error('The deck is locked');
+    err.locked = true;
+    throw err;
+  }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
   return data;
 }
+
+/* ---------- passphrase lock screen (loop 22) ---------- */
+let lockEl = null;
+function showLock(errorMsg) {
+  if (lockEl) {
+    lockEl.querySelector('.lock-error').textContent = errorMsg || '';
+    lockEl.querySelector('input').focus();
+    return;
+  }
+  lockEl = document.createElement('div');
+  lockEl.id = 'lock-screen';
+  lockEl.innerHTML = `
+    <form class="lock-card" autocomplete="off">
+      <div class="lock-title">This deck is locked</div>
+      <p class="lock-sub">Enter the passphrase to open your cards.</p>
+      <input type="password" name="deck-passphrase" autocomplete="current-password"
+             aria-label="Deck passphrase" placeholder="Passphrase" required>
+      <div class="lock-error" role="alert">${errorMsg ? esc(errorMsg) : ''}</div>
+      <button type="submit" class="lock-btn">Unlock deck</button>
+    </form>`;
+  lockEl.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = lockEl.querySelector('input');
+    const v = input.value.trim();
+    if (!v) return;
+    localStorage.setItem('the-deck:key', v);
+    input.value = '';
+    try {
+      await refresh();
+      hideLock();
+    } catch (err) {
+      localStorage.removeItem('the-deck:key');
+      showLock('That passphrase did not work. Try again.');
+    }
+  });
+  document.body.appendChild(lockEl);
+  lockEl.querySelector('input').focus();
+}
+function hideLock() { lockEl?.remove(); lockEl = null; }
 const getTasks = () => api('/api/tasks');
 const createTask = (title, description, extra) => api('/api/tasks', { method: 'POST', body: JSON.stringify({ title, description, ...(extra || {}) }) });
 const updateTask = (id, fields) => api(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(fields) });
@@ -1129,4 +1177,4 @@ document.addEventListener('visibilitychange', () => {
 
 $('#today').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 applyView();
-refresh().catch((err) => showToast(err.message, { error: true }));
+refresh().catch((err) => { if (!err.locked) showToast(err.message, { error: true }); });

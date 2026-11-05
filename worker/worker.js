@@ -196,11 +196,31 @@ async function handleApi(request, env, url) {
   return fail('Not found', 404);
 }
 
+// Loop 22: optional passphrase lock. When the DECK_PASSPHRASE secret is set,
+// every /api/* call must send it as x-deck-key; unset means open (local dev
+// parity). Static assets stay public - the app's code is open source; the
+// cards behind the API are what the lock protects.
+async function deckKeyOk(key, expected) {
+  if (!key || !expected) return false;
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(key)),
+    crypto.subtle.digest('SHA-256', enc.encode(expected)),
+  ]);
+  const x = new Uint8Array(a), y = new Uint8Array(b);
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
+  return d === 0;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith('/api/')) {
+        if (env.DECK_PASSPHRASE && !(await deckKeyOk(request.headers.get('x-deck-key'), env.DECK_PASSPHRASE))) {
+          return json({ error: 'The deck is locked' }, 401);
+        }
         return await handleApi(request, env, url);
       }
       return await env.ASSETS.fetch(request);

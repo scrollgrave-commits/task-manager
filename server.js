@@ -8,6 +8,20 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Loop 22: optional passphrase lock (parity with the Worker gate). Set
+// DECK_PASSPHRASE in the environment to require x-deck-key on every /api/*.
+const crypto = require('crypto');
+const DECK_KEY = process.env.DECK_PASSPHRASE;
+app.use('/api', (req, res, next) => {
+  if (!DECK_KEY) return next();
+  const h = (v) => crypto.createHash('sha256').update(String(v)).digest();
+  const key = req.get('x-deck-key');
+  if (!key || !crypto.timingSafeEqual(h(key), h(DECK_KEY))) {
+    return res.status(401).json({ error: 'The deck is locked' });
+  }
+  next();
+});
+
 // Static frontend
 app.use(express.static(path.join(__dirname, 'public')));
 

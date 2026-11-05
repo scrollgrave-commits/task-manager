@@ -640,3 +640,70 @@ body { overflow-x: hidden; }
   font-size: 0.8rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
+
+/* ---------- passphrase lock screen (loop 22) ---------- */
+#lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--desk, #151a1e);
+  padding: 24px;
+}
+#lock-screen .lock-card {
+  background: var(--paper, #f5efe3);
+  color: var(--ink, #2c2620);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 2px 0 rgba(255, 255, 255, 0.25) inset;
+  padding: 28px 26px 24px;
+  width: min(340px, 100%);
+  transform: rotate(-0.6deg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#lock-screen .lock-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+#lock-screen .lock-sub {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.75;
+}
+#lock-screen input[type="password"] {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(44, 38, 32, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.65);
+}
+#lock-screen input[type="password"]:focus {
+  outline: 2px solid var(--accent, #3f7d54);
+  outline-offset: 1px;
+}
+#lock-screen .lock-error {
+  min-height: 18px;
+  font-size: 13px;
+  color: #9c2b2b;
+}
+#lock-screen .lock-btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent, #3f7d54);
+  color: #fff;
+  cursor: pointer;
+}
+#lock-screen .lock-btn:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: no-preference) {
+  #lock-screen .lock-card { animation: lock-drop 0.35s cubic-bezier(0.34, 1.4, 0.64, 1); }
+  @keyframes lock-drop {
+    from { transform: translateY(-14px) rotate(-0.6deg); opacity: 0; }
+    to { transform: translateY(0) rotate(-0.6deg); opacity: 1; }
+  }
+}
