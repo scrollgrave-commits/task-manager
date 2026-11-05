@@ -15,6 +15,13 @@ function parseId(raw) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function isIsoDateString(v) {
+  // Strict ISO 8601 shape; Date.parse alone also accepts "Nov 1 2026" etc. (loop 21)
+  return typeof v === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.test(v)
+    && !Number.isNaN(Date.parse(v));
+}
+
 function validateTaskInput(body, partial) {
   const errors = [];
   if (!partial || body.title !== undefined) {
@@ -37,8 +44,7 @@ function validateTaskInput(body, partial) {
   if (body.sort_order !== undefined && (typeof body.sort_order !== 'number' || !Number.isFinite(body.sort_order))) {
     errors.push('sort_order must be a number');
   }
-  if (body.completed_at !== undefined &&
-      (typeof body.completed_at !== 'string' || Number.isNaN(Date.parse(body.completed_at)))) {
+  if (body.completed_at !== undefined && !isIsoDateString(body.completed_at)) {
     errors.push('completed_at must be an ISO 8601 date string');
   }
   if (body.completed_at_estimated !== undefined && typeof body.completed_at_estimated !== 'boolean') {
@@ -47,12 +53,12 @@ function validateTaskInput(body, partial) {
 
   // Undo-delete restore may reattach a card's original stamps (loop 20).
   if (body.created_at !== undefined) {
-    if (typeof body.created_at !== 'string' || Number.isNaN(Date.parse(body.created_at)) || Date.parse(body.created_at) > Date.now()) {
+    if (!isIsoDateString(body.created_at) || Date.parse(body.created_at) > Date.now()) {
       errors.push('created_at must be an ISO 8601 date string not in the future');
     }
   }
   if (body.updated_at !== undefined) {
-    if (typeof body.updated_at !== 'string' || Number.isNaN(Date.parse(body.updated_at)) || Date.parse(body.updated_at) > Date.now()) {
+    if (!isIsoDateString(body.updated_at) || Date.parse(body.updated_at) > Date.now()) {
       errors.push('updated_at must be an ISO 8601 date string not in the future');
     }
   }
