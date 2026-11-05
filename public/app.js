@@ -98,7 +98,17 @@ function showToast(message, { error = false, action = null, onAction = null } = 
   const toasts = [...stack.children];
   toasts.forEach((t, i) => t.classList.toggle('toast-compact', toasts.length > 3 && i < toasts.length - 2));
   requestAnimationFrame(syncToastPad);
-  timer = setTimeout(dismiss, action ? 5000 : 2600);
+  // Loop 18: the countdown pauses while the toast is hovered or holds focus,
+  // so a keyboard or mouse user never loses an Undo window mid-reach (WCAG 2.2.1)
+  let remaining = action ? 5000 : 2600;
+  let started = 0;
+  const startTimer = () => { started = Date.now(); timer = setTimeout(dismiss, remaining); };
+  const pauseTimer = () => { clearTimeout(timer); remaining = Math.max(remaining - (Date.now() - started), 400); };
+  el.addEventListener('mouseenter', pauseTimer);
+  el.addEventListener('mouseleave', startTimer);
+  el.addEventListener('focusin', pauseTimer);
+  el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) startTimer(); });
+  startTimer();
   return dismiss;
 }
 
