@@ -10,6 +10,9 @@ const state = {
 };
 try {  // Loop 5: remember which desk the user was working at
   if (localStorage.getItem('the-deck:view') === 'spread') state.view = 'spread';
+// Loop 16: the filter returns the way it was left, like the view does
+const savedFilter = localStorage.getItem('the-deck:filter');
+if (['all', 'active', 'completed'].includes(savedFilter)) state.filter = savedFilter;
 } catch {}
 
 const pendingTasks = new Map();
@@ -979,7 +982,25 @@ async function pullToTop(task) {
 }
 
 document.querySelectorAll('.filter').forEach((b) =>
-  b.addEventListener('click', () => { state.filter = b.dataset.filter; spreadDealIn = true; renderSpread(); }));
+  b.addEventListener('click', () => {
+    state.filter = b.dataset.filter;
+    try { localStorage.setItem('the-deck:filter', state.filter); } catch {}
+    spreadDealIn = true;
+    renderSpread();
+  }));
+
+  // Loop 16: arrow keys move across the filter tabs, as the tablist role promises
+  $('.filters').addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...document.querySelectorAll('.filter')];
+    const i = tabs.indexOf(document.activeElement);
+    if (i === -1) return;
+    e.preventDefault();
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 :
+      (i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+    tabs[j].focus();
+    tabs[j].click();
+  });
 
 /* ---------- view toggle ---------- */
 $('#view-toggle').addEventListener('click', () => {
