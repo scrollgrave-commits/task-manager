@@ -82,21 +82,38 @@ function showLock(errorMsg) {
   lockEl.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = lockEl.querySelector('input');
+    const btn = lockEl.querySelector('.lock-btn');
     const v = input.value;
     input.value = '';   // the passphrase is used once and never stored
     if (!v.trim()) return;
+    // Loop 24: a double-submit burns two of the ten allowed attempts, so the
+    // button sleeps until the answer comes back; and each failure kind gets
+    // its own honest message instead of blaming the passphrase.
+    btn.disabled = true;
     try {
       const res = await fetch('/api/unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passphrase: v }),
       });
-      if (!res.ok) throw new Error('locked');
-      await refresh();
-      hideLock();
-      setLockButton(true);
+      if (res.ok) {
+        await refresh();
+        hideLock();
+        setLockButton(true);
+        return;
+      }
+      if (res.status === 429) {
+        const mins = Math.ceil((Number(res.headers.get('Retry-After')) || 900) / 60);
+        showLock(`Too many attempts. Try again in about ${mins} minutes.`);
+      } else if (res.status === 401) {
+        showLock('That passphrase did not work. Try again.');
+      } else {
+        showLock(`The deck could not check that (error ${res.status}). Try again.`);
+      }
     } catch (err) {
-      showLock('That passphrase did not work. Try again.');
+      showLock('Cannot reach the deck. Check your connection and try again.');
+    } finally {
+      btn.disabled = false;
     }
   });
   document.body.appendChild(lockEl);
