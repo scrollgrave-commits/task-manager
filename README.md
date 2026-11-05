@@ -388,7 +388,11 @@ a hash in the database. Every other `/api/*` request needs that cookie -
 anything else gets a 401 - and cookie-authenticated mutations require an
 Origin exactly matching the app's own origin (scheme, host and port). Failed
 unlock attempts are limited to 10 per 15 minutes per client-IP hash (429 with
-Retry-After beyond that); only IP hashes are stored. The raw passphrase never touches browser storage, URLs, logs,
+Retry-After beyond that); only IP hashes are stored. `GET /api/session`
+reports whether the lock is armed so the frontend can show a Lock deck button
+only when it matters, and `POST /api/lock` ends the current device's session
+early (its row is deleted and the cookie cleared) - the per-device undo for
+the 30-day unlock. The raw passphrase never touches browser storage, URLs, logs,
 source or response bodies. Static assets stay public (the code is open
 source) - the lock protects the cards, not the bundle. Unset, the API is
 open, so local development and the original assignment behavior are

@@ -285,6 +285,27 @@ export default {
         if (request.method !== 'POST') return fail('Method not allowed', 405);
         return await handleUnlock(request, env);
       }
+      // Loop 23: session introspection + lock-now (logout).
+      if (url.pathname === '/api/session') {
+        if (!['GET', 'HEAD'].includes(request.method)) return fail('Method not allowed', 405);
+        if (!env.DECK_PASSPHRASE) return json({ active: false });
+        const ok = await deckSessionOk(request, env, url);
+        if (!ok) return json({ error: 'The deck is locked' }, 401);
+        return json({ active: true });
+      }
+      if (url.pathname === '/api/lock') {
+        if (request.method !== 'POST') return fail('Method not allowed', 405);
+        if (!env.DECK_PASSPHRASE) return fail('The deck is not locked', 400);
+        const ok = await deckSessionOk(request, env, url); // exact-origin guard included
+        if (ok === 'forbidden') return json({ error: 'Forbidden' }, 403);
+        if (!ok) return json({ error: 'The deck is locked' }, 401);
+        const m = /(?:^|;\s*)deck_session=([a-f0-9]{64})/.exec(request.headers.get('Cookie') || '');
+        if (m) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(m[1])).run();
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Set-Cookie': 'deck_session=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/' },
+        });
+      }
       if (url.pathname.startsWith('/api/')) {
         if (env.DECK_PASSPHRASE) {
           const ok = await deckSessionOk(request, env, url);

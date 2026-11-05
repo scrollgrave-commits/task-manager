@@ -147,6 +147,10 @@ function createSession(tokenHash) {
   return exp.toISOString();
 }
 
+function deleteSession(tokenHash) {
+  db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+}
+
 function sessionValid(tokenHash) {
   const row = db.prepare('SELECT expires_at FROM sessions WHERE token_hash = ?').get(tokenHash);
   return !!(row && row.expires_at > new Date().toISOString());
@@ -167,4 +171,4 @@ function clearUnlockAttempts(ipHash) {
   db.prepare('DELETE FROM unlock_attempts WHERE ip_hash = ?').run(ipHash);
 }
 
-module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, createSession, sessionValid, pruneUnlockAttempts, countUnlockAttempts, recordUnlockAttempt, clearUnlockAttempts };
+module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, createSession, deleteSession, sessionValid, pruneUnlockAttempts, countUnlockAttempts, recordUnlockAttempt, clearUnlockAttempts };

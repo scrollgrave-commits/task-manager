@@ -64,6 +64,17 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Loop 23: session introspection + lock-now (logout). Both sit behind the
+// /api gate above, so origin and cookie checks apply to them automatically.
+app.get('/api/session', (req, res) => res.json({ active: !!DECK_KEY }));
+app.post('/api/lock', (req, res) => {
+  if (!DECK_KEY) return res.status(400).json({ error: 'The deck is not locked' });
+  const m = /(?:^|;\s*)deck_session=([a-f0-9]{64})/.exec(req.get('Cookie') || '');
+  if (m) db.deleteSession(hash(m[1]).toString('hex'));
+  res.set('Set-Cookie', 'deck_session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/');
+  res.json({ ok: true });
+});
+
 // Static frontend
 app.use(express.static(path.join(__dirname, 'public')));
 

@@ -43,6 +43,23 @@ async function api(path, options = {}) {
   return data;
 }
 
+/* ---------- lock-now (loop 23): session state + early logout ---------- */
+function setLockButton(on) { const b = $('#lock-button'); if (b) b.hidden = !on; }
+async function checkSession() {
+  try {
+    const res = await fetch('/api/session');
+    if (res.ok) setLockButton(!!(await res.json()).active);
+  } catch { /* offline: leave the button as-is */ }
+}
+async function lockNow() {
+  try { await fetch('/api/lock', { method: 'POST' }); } catch { /* lock locally anyway */ }
+  state.tasks = [];
+  $('#deck').querySelectorAll('.card').forEach(c => c.remove());
+  renderDeck(); renderSpread(); renderProgress();
+  setLockButton(false);
+  showLock();
+}
+
 /* ---------- passphrase lock screen (loop 22) ---------- */
 let lockEl = null;
 function showLock(errorMsg) {
@@ -77,12 +94,14 @@ function showLock(errorMsg) {
       if (!res.ok) throw new Error('locked');
       await refresh();
       hideLock();
+      setLockButton(true);
     } catch (err) {
       showLock('That passphrase did not work. Try again.');
     }
   });
   document.body.appendChild(lockEl);
   lockEl.querySelector('input').focus();
+  $('#sync-status').textContent = 'Locked';
 }
 function hideLock() { lockEl?.remove(); lockEl = null; }
 const getTasks = () => api('/api/tasks');
@@ -1180,4 +1199,6 @@ document.addEventListener('visibilitychange', () => {
 
 $('#today').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 applyView();
+$('#lock-button').addEventListener('click', lockNow);
+checkSession();
 refresh().catch((err) => { if (!err.locked) showToast(err.message, { error: true }); });
