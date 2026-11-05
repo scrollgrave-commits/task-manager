@@ -81,15 +81,18 @@ function getTask(id) {
   return row ? rowToTask(row) : null;
 }
 
-function createTask({ title, description }) {
+function createTask({ title, description, createdAt, updatedAt }) {
   const now = new Date().toISOString();
+  // Undo-delete restore reattaches the original stamps so an undone card is
+  // indistinguishable from one that was never deleted (loop 20).
+  const created = createdAt || now;
   const result = db
     .prepare('INSERT INTO tasks (title, description, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-    .run(title, description ?? '', Date.now(), now, now);
+    .run(title, description ?? '', Date.now(), created, updatedAt || created);
   return getTask(Number(result.lastInsertRowid));
 }
 
-function updateTask(id, { title, description, completed, sort_order, completedAt, completedAtEstimated }) {
+function updateTask(id, { title, description, completed, sort_order, completedAt, completedAtEstimated, updatedAt }) {
   const existing = getTask(id);
   if (!existing) return null;
   const completedNow = completed !== undefined ? completed : existing.completed;
@@ -112,7 +115,7 @@ function updateTask(id, { title, description, completed, sort_order, completedAt
         : (existing.completed ? existing.completedAtEstimated : false))),
   };
   db.prepare('UPDATE tasks SET title = ?, description = ?, completed = ?, sort_order = ?, updated_at = ?, completed_at = ?, completed_at_estimated = ? WHERE id = ?')
-    .run(next.title, next.description, next.completed, next.sortOrder, now, next.completedAt, next.completedAtEstimated ? 1 : 0, id);
+    .run(next.title, next.description, next.completed, next.sortOrder, updatedAt !== undefined ? updatedAt : now, next.completedAt, next.completedAtEstimated ? 1 : 0, id);
   return getTask(id);
 }
 

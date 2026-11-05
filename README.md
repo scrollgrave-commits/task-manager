@@ -58,7 +58,7 @@ Base URL: `http://localhost:3000/api/tasks`
 | Method | Endpoint             | Description                        | Success | Errors          |
 | ------ | -------------------- | ---------------------------------- | ------- | --------------- |
 | GET    | `/`                  | List tasks (`?status=all|active|completed`) | 200 | 400 bad status  |
-| POST   | `/`                  | Create a task `{title, description?}`      | 201 | 400 validation  |
+| POST   | `/`                  | Create a task `{title, description?}`; undo-restore may also pass `created_at` + `updated_at` (ISO, not future) to reattach the original stamps | 201 | 400 validation  |
 | GET    | `/:id`               | Get one task                       | 200     | 400, 404        |
 | PUT    | `/:id`               | Edit `title`/`description`, set `completed`, set `sort_order` (deck position), and/or reattach a completion stamp with `completed_at` + `completed_at_estimated` (requires the task to be completed) | 200 | 400, 404   |
 | DELETE | `/:id`               | Delete a task                      | 204     | 400, 404        |
@@ -186,6 +186,39 @@ On 2026-11-05 a deploy built its config from scratch instead of from `wrangler.t
 
 1. **Build any temporary deploy config from `wrangler.toml`** (e.g. `sed` the real `database_id` in), never from a minimal skeleton. The `[assets]` block and every other base setting must survive.
 2. **Smoke-check the frontend right after every deploy**, not just the API: `curl -s <url>/` returns the app HTML, `styles.css` and `app.js` serve the current build, and the API regression suite passes. An API-only check would have called the broken deploy green.
+
+### Incident log (2026-11-05): live smoke test deleted a real card
+
+A live smoke test promoted its fixture to the deck top through the API and then
+deleted the top card without reloading, acting on a stale deck cache. The top
+card was a real user card, not the fixture. It was restored immediately through
+the app's own Undo, which recreated the content, position and completion state
+faithfully but reset the card's Added stamp, because undo-restore created a new
+row with fresh timestamps.
+
+Recovery of the original stamp was investigated and closed as not safely
+recoverable. The initial repair proposal assumed `wrangler d1 execute` accepted
+a `--bookmark` flag for a historical read; verification against the current
+Cloudflare docs showed no such flag exists - bookmarks belong only to
+`d1 time-travel restore` (a whole-database restore), the REST query endpoint
+takes only `{sql, params}`, and Sessions API bookmarks are freshness floors,
+not as-of reads. A whole-database restore was ruled out (it would have erased
+later legitimate writes), so no repair was attempted and no broader database
+token was minted. The reset stamp was disclosed instead.
+
+Three permanent fixes came out of it:
+
+1. **Live tests never act on non-fixtures.** The smoke harness reloads after
+   out-of-band API mutations, aborts unless the deck top is a `zz-smoke-*`
+   fixture, and its delete helper refuses non-fixture titles. Destructive
+   delete/Undo paths are tested against isolated local data, never the live
+   user's cards.
+2. **Undo-restore keeps the card's history.** The API accepts `created_at` /
+   `updated_at` on create and `updated_at` on update for exactly this path, so
+   an undone card is indistinguishable from one that was never deleted (see
+   "Undo restore keeps the card's history").
+3. **No assumed CLI flags in incident response.** Recovery routes are verified
+   against current vendor documentation before being proposed.
 
 ## Project structure
 
@@ -324,6 +357,20 @@ Deleting shows Undo for five seconds, same as completing. The restore re-deals
 the card's content at its old deck position and reattaches the original
 completion stamp with its provenance flag - an estimated "Done around" stays
 estimated, an exact "Done" stays exact (the API accepts `completed_at` and
-`completed_at_estimated` on PUT for exactly this). A restored card is a new
-row, so its Added stamp starts fresh; an update within a minute of creation no
-longer shows as "edited", so restores (and quick touch-ups) don't stamp noise.
+`completed_at_estimated` on PUT for exactly this). An update within a minute of creation no
+longer shows as "edited", so quick touch-ups don't stamp noise.
+
+### Undo restore keeps the card's history
+
+Undoing a delete used to return the card with a fresh Added stamp, because the
+restore created a new row with new timestamps - and worse, pairing an old
+creation date with a fresh update stamp would have produced a phantom "edited"
+line. A live incident (see the incident log) made the cost of that visible: a
+card restored after an accidental delete claimed to be a day younger than it
+was. The API now accepts `created_at` and `updated_at` on POST (validated ISO
+strings, never in the future, update never before creation) and `updated_at`
+on PUT, and undo-restore passes the snapshot's original stamps through both
+calls. An undone card now reads exactly as it did before deletion: same Added
+date, no invented "edited", completion stamp and provenance intact. Ordinary
+creates and edits are unchanged - the stamps default to now, and any edit
+without an explicit stamp still re-stamps the update time.

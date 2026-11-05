@@ -35,7 +35,7 @@ async function api(path, options = {}) {
   return data;
 }
 const getTasks = () => api('/api/tasks');
-const createTask = (title, description) => api('/api/tasks', { method: 'POST', body: JSON.stringify({ title, description }) });
+const createTask = (title, description, extra) => api('/api/tasks', { method: 'POST', body: JSON.stringify({ title, description, ...(extra || {}) }) });
 const updateTask = (id, fields) => api(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(fields) });
 const deleteTask = (id) => api(`/api/tasks/${id}`, { method: 'DELETE' });
 
@@ -395,8 +395,13 @@ async function undoDone(id) {
    The restored card is a new row: its Added stamp starts fresh. */
 async function restoreTask(snapshot) {
   try {
-    const created = await createTask(snapshot.title, snapshot.description);
-    const fields = { sort_order: snapshot.sortOrder };
+    // Loop 20: reattach the original Added/edited stamps so an undone card is
+    // indistinguishable from one that was never deleted.
+    const created = await createTask(snapshot.title, snapshot.description, {
+      created_at: snapshot.createdAt,
+      updated_at: snapshot.updatedAt,
+    });
+    const fields = { sort_order: snapshot.sortOrder, updated_at: snapshot.updatedAt };
     if (snapshot.completed) {
       fields.completed = true;
       if (snapshot.completedAt) fields.completed_at = snapshot.completedAt;

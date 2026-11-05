@@ -22,6 +22,8 @@ router.post('/', (req, res) => {
   const task = db.createTask({
     title: req.body.title.trim(),
     description: (req.body.description || '').trim(),
+    createdAt: req.body.created_at,
+    updatedAt: req.body.updated_at,
   });
   res.status(201).json(task);
 });
@@ -45,8 +47,9 @@ router.put('/:id', (req, res) => {
   const { errors } = validateTaskInput(body, { partial: true });
   if (errors.length > 0) return res.status(400).json({ error: errors.join('; ') });
   if (body.title === undefined && body.description === undefined && body.completed === undefined
-      && body.sort_order === undefined && body.completed_at === undefined && body.completed_at_estimated === undefined) {
-    return res.status(400).json({ error: 'provide at least one of: title, description, completed, sort_order, completed_at, completed_at_estimated' });
+      && body.sort_order === undefined && body.completed_at === undefined && body.completed_at_estimated === undefined
+      && body.updated_at === undefined) {
+    return res.status(400).json({ error: 'provide at least one of: title, description, completed, sort_order, completed_at, completed_at_estimated, updated_at' });
   }
 
   const updates = {};
@@ -56,6 +59,7 @@ router.put('/:id', (req, res) => {
   if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
   if (body.completed_at !== undefined) updates.completedAt = body.completed_at;
   if (body.completed_at_estimated !== undefined) updates.completedAtEstimated = body.completed_at_estimated;
+  if (body.updated_at !== undefined) updates.updatedAt = body.updated_at;
 
   const existing = db.getTask(id);
   if (!existing) return res.status(404).json({ error: `Task ${id} not found` });

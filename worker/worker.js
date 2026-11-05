@@ -44,6 +44,29 @@ function validateTaskInput(body, partial) {
   if (body.completed_at_estimated !== undefined && typeof body.completed_at_estimated !== 'boolean') {
     errors.push('completed_at_estimated must be true or false');
   }
+
+  // Undo-delete restore may reattach a card's original stamps (loop 20).
+  if (body.created_at !== undefined) {
+    if (typeof body.created_at !== 'string' || Number.isNaN(Date.parse(body.created_at)) || Date.parse(body.created_at) > Date.now()) {
+      errors.push('created_at must be an ISO 8601 date string not in the future');
+    }
+  }
+  if (body.updated_at !== undefined) {
+    if (typeof body.updated_at !== 'string' || Number.isNaN(Date.parse(body.updated_at)) || Date.parse(body.updated_at) > Date.now()) {
+      errors.push('updated_at must be an ISO 8601 date string not in the future');
+    }
+  }
+  if (body.updated_at !== undefined && !partial && body.created_at === undefined) {
+    errors.push('updated_at requires created_at when creating a task');
+  }
+  if (partial && body.created_at !== undefined) {
+    errors.push('created_at can only be set when creating a task');
+  }
+  if (!partial && body.created_at !== undefined && body.updated_at !== undefined
+      && !Number.isNaN(Date.parse(body.created_at)) && !Number.isNaN(Date.parse(body.updated_at))
+      && Date.parse(body.updated_at) < Date.parse(body.created_at)) {
+    errors.push('updated_at must not be before created_at');
+  }
   return errors;
 }
 
@@ -94,7 +117,7 @@ async function handleApi(request, env, url) {
     const now = new Date().toISOString();
     const result = await db
       .prepare('INSERT INTO tasks (title, description, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(body.title.trim(), (body.description || '').trim(), Date.now(), now, now)
+      .bind(body.title.trim(), (body.description || '').trim(), Date.now(), body.created_at || now, body.updated_at || body.created_at || now)
       .run();
     return json(await getTask(db, result.meta.last_row_id), 201);
   }
@@ -116,8 +139,9 @@ async function handleApi(request, env, url) {
       const errors = validateTaskInput(body, true);
       if (errors.length > 0) return fail(errors.join('; '), 400);
       if (body.title === undefined && body.description === undefined && body.completed === undefined
-          && body.sort_order === undefined && body.completed_at === undefined && body.completed_at_estimated === undefined) {
-        return fail('provide at least one of: title, description, completed, sort_order, completed_at, completed_at_estimated', 400);
+          && body.sort_order === undefined && body.completed_at === undefined && body.completed_at_estimated === undefined
+          && body.updated_at === undefined) {
+        return fail('provide at least one of: title, description, completed, sort_order, completed_at, completed_at_estimated, updated_at', 400);
       }
       const existing = await getTask(db, id);
       if (!existing) return fail(`Task ${id} not found`, 404);
@@ -147,7 +171,7 @@ async function handleApi(request, env, url) {
           body.description !== undefined ? body.description.trim() : existing.description,
           completedNow ? 1 : 0,
           body.sort_order !== undefined ? body.sort_order : existing.sortOrder,
-          now,
+          body.updated_at !== undefined ? body.updated_at : now,
           completedAt,
           completedAtEstimated ? 1 : 0,
           id,
