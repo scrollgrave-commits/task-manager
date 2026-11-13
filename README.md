@@ -36,7 +36,7 @@ Backed by a REST CRUD API and a real SQLite database.
 Hosted on Cloudflare Workers + D1 (the same REST API, backed by a durable SQLite-compatible database):
 **https://the-deck-tasks.scrollgrave.workers.dev**
 
-It is a public assignment demo: anyone with the link can add, edit, complete and delete its tasks.
+It is a public assignment demo. The page is public, but the live deployment is protected by a passphrase lock: the API requires an unlock session and returns 401 without one.
 
 ## Setup
 
