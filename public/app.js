@@ -699,11 +699,17 @@ function reorderTask(id, index) {
     drag = null;
   };
   // keep the ghost inside the visible viewport; when clamped, the card slides
-  // along the edge instead of following the pointer off-screen
-  const clampedGhostPos = (x, y, w, h) => ({
-    x: Math.max(4, Math.min(x, window.innerWidth - w - 4)),
-    y: Math.max(4, Math.min(y, window.innerHeight - Math.min(h, 80) - 4)),
-  });
+  // along the edge instead of following the pointer off-screen. The ghost is
+  // rotated 1.5deg: clamp its rotated bounding box, not the unrotated size.
+  const GHOST_TILT = 1.5 * Math.PI / 180;
+  const clampedGhostPos = (x, y, w, h) => {
+    const ox = (h * Math.sin(GHOST_TILT) + w * (1 - Math.cos(GHOST_TILT))) / 2;
+    const oy = (w * Math.sin(GHOST_TILT) + h * (1 - Math.cos(GHOST_TILT))) / 2;
+    return {
+      x: Math.max(4 + ox, Math.min(x, window.innerWidth - w - 4 - ox)),
+      y: Math.max(4 + oy, Math.min(y, window.innerHeight - Math.min(h, 80) - 4 - oy)),
+    };
+  };
 
   list.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.drag-task');
@@ -719,6 +725,9 @@ function reorderTask(id, index) {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
         const ghost = li.cloneNode(true);
         ghost.classList.add('drag-ghost');
+        // a lifted card tracks the pointer 1:1: drop the inherited springy
+        // transform transition - its overshoot could spill past the clamp
+        ghost.style.transition = 'none';
         ghost.style.width = Math.min(startRect.width, window.innerWidth - 8) + 'px';
         document.body.appendChild(ghost);
         li.classList.add('dragging');
