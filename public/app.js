@@ -16,6 +16,7 @@ if (['all', 'active', 'completed'].includes(savedFilter)) state.filter = savedFi
 } catch {}
 
 const pendingTasks = new Map();
+let spreadWrites = 0;    // in-flight writes that aren't optimistic deck moves (Loop 28)
 let deckAnimating = false;
 let spreadDealIn = false;   // deal the spread in only when the view or filter changes
 let lastAddedId = null;      // a freshly dealt card animates on its own
@@ -299,12 +300,14 @@ function wireTopCard(card, task) {
       setTimeout(() => { delBtn.classList.remove('armed'); delBtn.textContent = 'Delete'; }, 2600);
       return;
     }
+    spreadWrites++; updateDeckControls();
     try {
       const snapshot = { ...task }; // Loop 15: deck deletes get the same undo window as spread deletes
       await deleteTask(task.id);
       showToast(`Deleted "${task.title}"`, { action: 'Undo', onAction: () => restoreTask(snapshot) });
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
+    finally { spreadWrites--; updateDeckControls(); }
   });
 
   const stampDone = card.querySelector('.card-stamp:not(.stamp-later)');
@@ -380,8 +383,11 @@ function updateDeckControls() {
   document.querySelectorAll('.card.is-top button').forEach(b => b.disabled = state.editingCard ? false : !!(top && pendingTasks.has(top.id)));
   $('#done-button').disabled = blocked;
   $('#later-button').disabled = blocked;
-  $('#sync-status').textContent = pendingTasks.size ? 'Saving changes...' : 'All changes saved';
-  $('#sync-status').classList.toggle('is-saving', pendingTasks.size > 0);
+  // Loop 28: spread writes (check/edit/delete/reorder/restore) count too - the
+  // status line must not claim "saved" while any write is still in flight.
+  const saving = pendingTasks.size + spreadWrites > 0;
+  $('#sync-status').textContent = saving ? 'Saving changes...' : 'All changes saved';
+  $('#sync-status').classList.toggle('is-saving', saving);
 }
 
 function paintState() { renderDeck(); renderSpread(); renderProgress(); updateDeckControls(); }
@@ -440,7 +446,8 @@ async function commitFling(task, outcome) {
       action: 'Undo', onAction: () => undoDone(task.id),
     });
     // Loop 17: a mis-swipe left buries the top card; let it come straight back
-    else showToast(`Sent "${task.title}" to the back`, {
+    // Loop 28: a one-card deck has no back - the fling changes nothing, so no toast
+    else if (activeTasks().length > 1) showToast(`Sent "${task.title}" to the back`, {
       action: 'Undo', onAction: () => undoLater(task.id, previous.sortOrder),
     });
   } catch (err) {
@@ -486,6 +493,7 @@ async function undoDone(id) {
    stamp with its provenance flag, so an estimated stamp stays estimated.
    The restored card is a new row: its Added stamp starts fresh. */
 async function restoreTask(snapshot) {
+  spreadWrites++; updateDeckControls();
   try {
     // Loop 20: reattach the original Added/edited stamps so an undone card is
     // indistinguishable from one that was never deleted.
@@ -505,7 +513,7 @@ async function restoreTask(snapshot) {
   } catch (err) {
     showToast(`Could not restore "${snapshot.title}": ${err.message}`, { error: true });
     try { await refresh(); } catch {}
-  }
+  } finally { spreadWrites--; updateDeckControls(); }
 }
 
 $('#done-button').addEventListener('click', () => {
@@ -523,31 +531,44 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* Loop 28: maxlength stops input silently at the cap - a long paste would
+   lose its tail without a word. A full field says so. */
+function wireCapHint(input, hint) {
+  if (!input || !hint) return;
+  const sync = () => { hint.hidden = input.value.length < input.maxLength; };
+  input.addEventListener('input', sync);
+  sync();
+}
+
 /* ---------- card edit ---------- */
 function openCardEdit(card, task) {
   state.editingCard = true; updateDeckControls();
   card.innerHTML = `
     <form class="card-edit" novalidate>
       <input type="text" class="edit-title" value="${esc(task.title)}" maxlength="200" aria-label="Edit title" />
-      <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="500" placeholder="Note (optional)" aria-label="Edit note" />
+      <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
+      <p class="cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
       <div class="card-edit-actions">
         <button type="button" class="cancel-edit">Cancel</button>
         <button type="submit" class="save-edit">Save</button>
       </div>
     </form>`;
   const form = card.querySelector('form');
+  wireCapHint(form.querySelector('.edit-note'), form.querySelector('.cap-hint'));
   form.querySelector('.edit-title').focus();
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = form.querySelector('.edit-title').value.trim();
     const description = form.querySelector('.edit-note').value.trim();
     if (!title) { showToast('Title cannot be empty', { error: true }); return; }
+    spreadWrites++; updateDeckControls();
     try {
       await updateTask(task.id, { title, description });
       state.editingCard = false;
       showToast(`Updated "${title}"`);
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
+    finally { spreadWrites--; updateDeckControls(); }
   });
   const closeDeckEdit = async () => {
     state.editingCard = false;
@@ -668,13 +689,15 @@ function reorderTask(id, index) {
   moved.sortOrder = newSort;
   state.tasks.sort((a, b) => (a.completed - b.completed) || (a.sortOrder - b.sortOrder));
   renderSpread();
+  spreadWrites++; updateDeckControls();
   return updateTask(id, { sort_order: newSort })
     .then(() => true)
     .catch(async (err) => {
       showToast(err.message, { error: true });
       await refresh(); // server is the truth: put the card back where it really is
       return false;
-    });
+    })
+    .finally(() => { spreadWrites--; updateDeckControls(); });
 }
 
 (() => {
@@ -823,6 +846,7 @@ $('#task-list').addEventListener('click', async (e) => {
   if (!task || pendingTasks.has(task.id)) return;
 
   if (e.target.closest('.task-check')) {
+    spreadWrites++; updateDeckControls();
     try {
       const done = !task.completed;
       await updateTask(task.id, { completed: done });
@@ -836,6 +860,7 @@ $('#task-list').addEventListener('click', async (e) => {
       }
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
+    finally { spreadWrites--; updateDeckControls(); }
     return;
   }
 
@@ -845,24 +870,28 @@ $('#task-list').addEventListener('click', async (e) => {
     body.innerHTML = `
       <form class="task-edit" novalidate>
         <input type="text" class="edit-title" value="${esc(task.title)}" maxlength="200" aria-label="Edit title" />
-        <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="500" placeholder="Note (optional)" aria-label="Edit note" />
+        <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
+        <p class="cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
         <div class="edit-actions">
           <button type="button" class="cancel-edit">Cancel</button>
           <button type="submit" class="save-edit">Save</button>
         </div>
       </form>`;
     const form = body.querySelector('form');
+    wireCapHint(form.querySelector('.edit-note'), form.querySelector('.cap-hint'));
     form.querySelector('.edit-title').focus();
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const title = form.querySelector('.edit-title').value.trim();
       const description = form.querySelector('.edit-note').value.trim();
       if (!title) { showToast('Title cannot be empty', { error: true }); return; }
+      spreadWrites++; updateDeckControls();
       try {
         await updateTask(task.id, { title, description });
         showToast(`Updated "${title}"`);
         await refresh();
       } catch (err) { showToast(err.message, { error: true }); }
+      finally { spreadWrites--; updateDeckControls(); }
     });
     form.querySelector('.cancel-edit').addEventListener('click', () => refresh());
     form.addEventListener('keydown', (e) => { // Loop 17: Escape backs out of an edit
@@ -879,6 +908,7 @@ $('#task-list').addEventListener('click', async (e) => {
       setTimeout(() => { delBtn.classList.remove('armed'); delBtn.textContent = 'Delete'; }, 2600);
       return;
     }
+    spreadWrites++; updateDeckControls();
     try {
       const snapshot = { ...task };
       // Loop 17: keep keyboard users placed - remember the card after this one
@@ -892,6 +922,7 @@ $('#task-list').addEventListener('click', async (e) => {
         next?.querySelector('.delete-task')?.focus();
       }
     } catch (err) { showToast(err.message, { error: true }); }
+    finally { spreadWrites--; updateDeckControls(); }
     return;
   }
 
@@ -1001,6 +1032,7 @@ $('#add-form').addEventListener('submit', async (e) => {
   }
 });
 $('#new-title').addEventListener('input', () => { $('#form-error').hidden = true; });
+wireCapHint($('#new-note'), $('#note-cap-hint'));
 
 /* ---------- progress ring ---------- */
 function renderProgress() {

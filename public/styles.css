@@ -297,6 +297,11 @@ body {
 #add-button:active { transform: scale(0.97); }
 .form-error { color: #ff8a8e; font-size: 0.88rem; font-weight: 600; flex: 1 1 100%; padding: 10px 4px 0; }
 .form-error[hidden] { display: none; }
+/* Loop 28: a full field stops taking input (maxlength) - say so out loud */
+.cap-hint { color: var(--muted); font-size: 0.8rem; flex: 1 1 100%; padding: 6px 4px 0; margin: 0; }
+.cap-hint[hidden] { display: none; }
+/* on a cream card the dark-theme muted tone is too faint - ink, not mist */
+.card .cap-hint, .task .cap-hint { color: var(--ink-soft); }
 
 /* ---------- toast stack (loop 14: every action keeps its own undo window) ---------- */
 #toast-stack {

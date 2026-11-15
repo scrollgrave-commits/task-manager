@@ -71,7 +71,8 @@
       <div class="add-slip">
         <div class="add-inputs">
           <input id="new-title" type="text" placeholder="Write a new card..." autocomplete="off" maxlength="200" aria-label="Task title" />
-          <input id="new-note" type="text" placeholder="Add a note (optional)" autocomplete="off" maxlength="500" aria-label="Task note" />
+          <input id="new-note" type="text" placeholder="Add a note (optional)" autocomplete="off" maxlength="1000" aria-label="Task note" />
+          <p class="cap-hint" id="note-cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
         </div>
         <button type="submit" id="add-button"><span aria-hidden="true">＋</span> Deal card</button>
       </div>
