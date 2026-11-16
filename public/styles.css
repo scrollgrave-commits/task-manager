@@ -69,6 +69,7 @@ body {
 #deck { position: absolute; inset: 0; }
 
 .card {
+  color-scheme: light; /* paper card on the dark desk: controls stay ink-on-paper */
   position: absolute;
   inset: 0;
   margin: auto;
@@ -304,6 +305,35 @@ body {
 .card .cap-hint, .task .cap-hint { color: var(--ink-soft); }
 
 /* ---------- toast stack (loop 14: every action keeps its own undo window) ---------- */
+/* Loop 29: parked unsaved drafts - a small paper slip at the desk's left edge,
+   stays until the user reopens, copies or discards it */
+#draft-tray {
+  position: fixed; left: 16px; bottom: 16px; z-index: 55;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(340px, calc(100vw - 32px));
+}
+.draft-chip {
+  color-scheme: light;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--paper-edge); border-radius: 12px;
+  padding: 10px 12px; box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+}
+.draft-chip-title { margin: 0; font-size: 0.85rem; font-weight: 700; }
+.draft-chip-sub { margin: 3px 0 8px; font-size: 0.75rem; color: var(--ink-soft); }
+.draft-chip-actions { display: flex; gap: 6px; }
+.draft-chip-actions button {
+  font: inherit; font-size: 0.78rem; font-weight: 600;
+  border: 1px solid var(--paper-edge); background: rgba(0,0,0,0.05); color: var(--ink);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+}
+.draft-chip-actions button:hover:not(:disabled) { background: rgba(0,0,0,0.1); }
+.draft-chip-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+.draft-chip-actions .draft-discard { color: var(--danger); }
+.edit-warn {
+  flex: 1 1 100%; margin: 0; padding: 6px 4px 0;
+  color: #8a5a00; font-size: 0.8rem; font-weight: 600;
+}
+
 #toast-stack {
   position: fixed; bottom: 26px; left: 50%;
   transform: translateX(-50%);
@@ -483,6 +513,7 @@ body { overflow-x: hidden; }
 /* Loop 3: the spread is a real spread - paper cards laid out on the desk. */
 .task-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
 .task {
+  color-scheme: light; /* paper card on the dark desk */
   position: relative; display: flex; flex-direction: row; align-items: flex-start; flex-wrap: nowrap;
   background:
     repeating-linear-gradient(to bottom, transparent 0 27px, rgba(27,33,48,0.05) 27px 28px),

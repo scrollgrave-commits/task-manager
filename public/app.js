@@ -285,6 +285,7 @@ function renderDeck() {
   const top = deck.querySelector('.card.is-top');
   if (top && !top.dataset.wired) { wireTopCard(top, active[0]); top.dataset.wired = 'true'; }
   updateDeckControls();
+  renderOrphans();
 }
 
 /* Top card: drag to decide (direct manipulation, velocity carried into the fling) */
@@ -541,12 +542,12 @@ function wireCapHint(input, hint) {
 }
 
 /* ---------- card edit ---------- */
-function openCardEdit(card, task) {
+function openCardEdit(card, task, draft) {
   state.editingCard = true; updateDeckControls();
   card.innerHTML = `
     <form class="card-edit" novalidate>
-      <input type="text" class="edit-title" value="${esc(task.title)}" maxlength="200" aria-label="Edit title" />
-      <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
+      <input type="text" class="edit-title" maxlength="200" aria-label="Edit title" />
+      <input type="text" class="edit-note" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
       <p class="cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
       <div class="card-edit-actions">
         <button type="button" class="cancel-edit">Cancel</button>
@@ -554,8 +555,14 @@ function openCardEdit(card, task) {
       </div>
     </form>`;
   const form = card.querySelector('form');
+  form.querySelector('.edit-title').value = draft ? draft.title : task.title;
+  form.querySelector('.edit-note').value = draft ? draft.note : task.description;
+  form.dataset.baseTitle = draft && draft.baseTitle !== undefined ? draft.baseTitle : task.title;
+  form.dataset.baseNote = draft && draft.baseNote !== undefined ? draft.baseNote : task.description;
+  warnIfCardChanged(form, task, draft);
   wireCapHint(form.querySelector('.edit-note'), form.querySelector('.cap-hint'));
-  form.querySelector('.edit-title').focus();
+  if (draft) restoreDraftFocus(form, draft);
+  else form.querySelector('.edit-title').focus();
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = form.querySelector('.edit-title').value.trim();
@@ -565,6 +572,7 @@ function openCardEdit(card, task) {
     try {
       await updateTask(task.id, { title, description });
       state.editingCard = false;
+      form.remove(); // saved: the draft is done - refresh must not re-open it
       showToast(`Updated "${title}"`);
       await refresh();
     } catch (err) { showToast(err.message, { error: true }); }
@@ -572,6 +580,7 @@ function openCardEdit(card, task) {
   });
   const closeDeckEdit = async () => {
     state.editingCard = false;
+    form.remove(); // cancelled on purpose: nothing to preserve
     await refresh();
   };
   form.querySelector('.cancel-edit').addEventListener('click', closeDeckEdit);
@@ -581,8 +590,190 @@ function openCardEdit(card, task) {
 }
 
 /* ---------- spread view ---------- */
+/* Loop 29: an open edit form holds typed, unsaved text. Any write that
+   completes (another card's checkbox, an undo, a pick-up) refreshes and
+   rebuilds the list - without preservation that draft silently dies.
+   Capture the draft before the rebuild and re-open it on the same card. */
+function captureEditDraft(form) {
+  if (!form) return null;
+  const holder = form.closest('[data-id]');
+  if (!holder) return null;
+  const titleEl = form.querySelector('.edit-title');
+  const noteEl = form.querySelector('.edit-note');
+  const active = document.activeElement;
+  const focused = active === titleEl ? 'title' : active === noteEl ? 'note' : null;
+  const f = focused === 'note' ? noteEl : titleEl;
+  return {
+    id: Number(holder.dataset.id),
+    title: titleEl.value,
+    note: noteEl.value,
+    focused,
+    selStart: focused ? f.selectionStart : null,
+    selEnd: focused ? f.selectionEnd : null,
+    baseTitle: form.dataset.baseTitle,
+    baseNote: form.dataset.baseNote,
+  };
+}
+
+/* A restored draft sits on top of a card that may have changed elsewhere
+   while it was parked - flag it so saving is an informed overwrite. */
+function warnIfCardChanged(form, task, draft) {
+  if (!draft) return;
+  if (task.title === form.dataset.baseTitle && task.description === form.dataset.baseNote) return;
+  const warn = document.createElement('p');
+  warn.className = 'edit-warn';
+  warn.setAttribute('role', 'status');
+  warn.textContent = 'This card changed elsewhere while you were editing - your draft is restored above, and saving replaces the card\u2019s current text.';
+  form.insertBefore(warn, form.querySelector('.edit-actions, .card-edit-actions'));
+}
+
+function restoreDraftFocus(form, draft) {
+  if (!draft.focused) return;
+  const el = form.querySelector(draft.focused === 'note' ? '.edit-note' : '.edit-title');
+  el.focus();
+  try { el.setSelectionRange(draft.selStart, draft.selEnd); } catch {}
+}
+
+/* Loop 29 (revised): a draft whose card is no longer eligible (deleted
+   elsewhere, hidden by the filter, off the deck's top) is NEVER thrown away
+   silently. It parks in the draft tray until the user explicitly reopens,
+   copies or discards it. A deleted card is never resurrected; a card that
+   changed elsewhere is flagged inside the reopened form, so saving is an
+   informed choice, not a silent overwrite. */
+const orphanedDrafts = [];
+
+function orphanDraft(draft, origin, reason) {
+  orphanedDrafts.push({ ...draft, origin, reason });
+  renderOrphans();
+}
+
+function passesFilter(task) {
+  return state.filter === 'all' ? true : state.filter === 'active' ? !task.completed : task.completed;
+}
+
+function orphanEligible(od) {
+  const task = state.tasks.find((t) => t.id === od.id);
+  if (!task) return false; // a deleted card is never resurrected
+  // A deck draft can only reopen on the top card. A spread draft can always
+  // reopen while its card exists - reopening switches the filter for you.
+  if (od.origin === 'deck') return (activeTasks()[0] || {}).id === od.id;
+  return true;
+}
+
+function renderOrphans() {
+  let tray = $('#draft-tray');
+  if (!orphanedDrafts.length) { tray && tray.remove(); return; }
+  if (!tray) {
+    tray = document.createElement('div');
+    tray.id = 'draft-tray';
+    document.body.appendChild(tray);
+  }
+  tray.innerHTML = '';
+  orphanedDrafts.forEach((od, i) => {
+    const task = state.tasks.find((t) => t.id === od.id);
+    const eligible = orphanEligible(od);
+    const chip = document.createElement('div');
+    chip.className = 'draft-chip';
+    chip.innerHTML = `
+      <p class="draft-chip-title">Unsaved edit to "${esc(od.baseTitle || od.title)}"</p>
+      <p class="draft-chip-sub">${esc(od.reason)}</p>
+      <div class="draft-chip-actions">
+        <button type="button" class="draft-reopen">Reopen</button>
+        <button type="button" class="draft-copy">Copy text</button>
+        <button type="button" class="draft-discard">Discard</button>
+      </div>`;
+    const reopenBtn = chip.querySelector('.draft-reopen');
+    reopenBtn.disabled = !eligible;
+    reopenBtn.title = eligible ? '' : task
+      ? 'The card is not on top of the deck right now'
+      : 'The card is gone - copy the text or discard the draft';
+    reopenBtn.addEventListener('click', () => reopenOrphan(od, i));
+    chip.querySelector('.draft-copy').addEventListener('click', async () => {
+      const text = od.title + (od.note ? `\n${od.note}` : '');
+      try { await navigator.clipboard.writeText(text); showToast('Draft text copied'); }
+      catch { showToast('Could not copy automatically - reopen the draft and copy it manually.', { error: true }); }
+    });
+    chip.querySelector('.draft-discard').addEventListener('click', () => {
+      orphanedDrafts.splice(i, 1);
+      renderOrphans();
+      showToast('Unsaved edit discarded');
+    });
+    tray.appendChild(chip);
+  });
+}
+
+function reopenOrphan(od, i) {
+  const task = state.tasks.find((t) => t.id === od.id);
+  if (!task || !orphanEligible(od)) { renderOrphans(); return; }
+  if (od.origin === 'deck') {
+    const card = $('#deck .card.is-top');
+    if (!card) { renderOrphans(); return; }
+    openCardEdit(card, task, od);
+  } else {
+    if (state.view !== 'spread') {
+      state.view = 'spread';
+      try { localStorage.setItem('the-deck:view', 'spread'); } catch {}
+      applyView();
+    }
+    if (!passesFilter(task)) {
+      state.filter = 'all';
+      try { localStorage.setItem('the-deck:filter', 'all'); } catch {}
+      renderSpread();
+    }
+    const li = [...document.querySelectorAll('#task-list .task')].find((el) => Number(el.dataset.id) === od.id);
+    if (!li) { renderOrphans(); return; }
+    openSpreadEdit(li, task, od);
+  }
+  orphanedDrafts.splice(i, 1);
+  renderOrphans();
+}
+
+function openSpreadEdit(li, task, draft) {
+  const body = li.querySelector('.task-body');
+  li.querySelector('.task-actions').hidden = true;
+  body.innerHTML = `
+    <form class="task-edit" novalidate>
+      <input type="text" class="edit-title" maxlength="200" aria-label="Edit title" />
+      <input type="text" class="edit-note" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
+      <p class="cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
+      <div class="edit-actions">
+        <button type="button" class="cancel-edit">Cancel</button>
+        <button type="submit" class="save-edit">Save</button>
+      </div>
+    </form>`;
+  const form = body.querySelector('form');
+  form.querySelector('.edit-title').value = draft ? draft.title : task.title;
+  form.querySelector('.edit-note').value = draft ? draft.note : task.description;
+  form.dataset.baseTitle = draft && draft.baseTitle !== undefined ? draft.baseTitle : task.title;
+  form.dataset.baseNote = draft && draft.baseNote !== undefined ? draft.baseNote : task.description;
+  warnIfCardChanged(form, task, draft);
+  wireCapHint(form.querySelector('.edit-note'), form.querySelector('.cap-hint'));
+  if (draft) restoreDraftFocus(form, draft);
+  else form.querySelector('.edit-title').focus();
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const title = form.querySelector('.edit-title').value.trim();
+    const description = form.querySelector('.edit-note').value.trim();
+    if (!title) { showToast('Title cannot be empty', { error: true }); return; }
+    spreadWrites++; updateDeckControls();
+    try {
+      await updateTask(task.id, { title, description });
+      form.remove(); // saved: the draft is done - refresh must not re-open it
+      showToast(`Updated "${title}"`);
+      await refresh();
+    } catch (err) { showToast(err.message, { error: true }); }
+    finally { spreadWrites--; updateDeckControls(); }
+  });
+  const closeSpreadEdit = () => { form.remove(); refresh(); }; // cancelled on purpose
+  form.querySelector('.cancel-edit').addEventListener('click', closeSpreadEdit);
+  form.addEventListener('keydown', (e) => { // Loop 17: Escape backs out of an edit
+    if (e.key === 'Escape') { e.preventDefault(); closeSpreadEdit(); }
+  });
+}
+
 function renderSpread() {
   const list = $('#task-list');
+  const draft = captureEditDraft(list.querySelector('.task-edit'));
   // Loop 12: FLIP - remember where each visible card sits before the re-render,
   // so surviving cards can glide to their new spot instead of jumping
   // (reference: motion-flip-expand, webdevpuneet.com/ui-snippets/motion-flip-expand).
@@ -664,6 +855,18 @@ function renderSpread() {
   }
   spreadDealIn = false;
   lastAddedId = null;
+
+  // Loop 29: hand the captured draft back to its card; if the card can't
+  // take it right now, park it in the draft tray - never silent loss.
+  if (draft) {
+    const li = [...list.querySelectorAll('.task')].find((el) => Number(el.dataset.id) === draft.id);
+    const task = state.tasks.find((t) => t.id === draft.id);
+    if (li && task) openSpreadEdit(li, task, draft);
+    else orphanDraft(draft, 'spread', task
+      ? 'The card is hidden by the current filter.'
+      : 'The card was deleted elsewhere.');
+  }
+  renderOrphans();
 }
 
 /* Loop 9: spread cards lean toward the cursor - fine pointers only, never under
@@ -865,38 +1068,7 @@ $('#task-list').addEventListener('click', async (e) => {
   }
 
   if (e.target.closest('.edit-task')) {
-    const body = li.querySelector('.task-body');
-    li.querySelector('.task-actions').hidden = true;
-    body.innerHTML = `
-      <form class="task-edit" novalidate>
-        <input type="text" class="edit-title" value="${esc(task.title)}" maxlength="200" aria-label="Edit title" />
-        <input type="text" class="edit-note" value="${esc(task.description)}" maxlength="1000" placeholder="Note (optional)" aria-label="Edit note" />
-        <p class="cap-hint" role="status" hidden>Note limit reached (1000 characters)</p>
-        <div class="edit-actions">
-          <button type="button" class="cancel-edit">Cancel</button>
-          <button type="submit" class="save-edit">Save</button>
-        </div>
-      </form>`;
-    const form = body.querySelector('form');
-    wireCapHint(form.querySelector('.edit-note'), form.querySelector('.cap-hint'));
-    form.querySelector('.edit-title').focus();
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const title = form.querySelector('.edit-title').value.trim();
-      const description = form.querySelector('.edit-note').value.trim();
-      if (!title) { showToast('Title cannot be empty', { error: true }); return; }
-      spreadWrites++; updateDeckControls();
-      try {
-        await updateTask(task.id, { title, description });
-        showToast(`Updated "${title}"`);
-        await refresh();
-      } catch (err) { showToast(err.message, { error: true }); }
-      finally { spreadWrites--; updateDeckControls(); }
-    });
-    form.querySelector('.cancel-edit').addEventListener('click', () => refresh());
-    form.addEventListener('keydown', (e) => { // Loop 17: Escape backs out of an edit
-      if (e.key === 'Escape') { e.preventDefault(); refresh(); }
-    });
+    openSpreadEdit(li, task);
     return;
   }
 
@@ -1020,6 +1192,12 @@ $('#add-form').addEventListener('submit', async (e) => {
     return;
   }
   errEl.hidden = true;
+  // Loop 29: a slow create plus an impatient second submit dealt the same
+  // card twice - the button sleeps until the answer comes back (same fix
+  // shape as the loop-24 unlock guard).
+  const dealBtn = $('#add-button');
+  if (dealBtn.disabled) return;
+  dealBtn.disabled = true;
   try {
     const task = await createTask(title, noteEl.value.trim());
     lastAddedId = task.id;
@@ -1029,6 +1207,8 @@ $('#add-form').addEventListener('submit', async (e) => {
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;
+  } finally {
+    dealBtn.disabled = false;
   }
 });
 $('#new-title').addEventListener('input', () => { $('#form-error').hidden = true; });
@@ -1051,10 +1231,25 @@ async function refresh() {
   // Preserve optimistic records if an independent CRUD refresh overlaps a save.
   state.tasks = tasks.map(t => pendingTasks.has(t.id) ? (state.tasks.find(local => local.id === t.id) || t) : t);
   sortTasks();
+  // Loop 29: an open deck edit holds unsaved text - keep it across the rebuild
+  const deckDraft = captureEditDraft(document.querySelector('#deck .card-edit'));
   $('#deck').querySelectorAll('.card:not(.is-leaving)').forEach(c => c.remove());
   renderDeck();
   renderSpread();
   renderProgress();
+  if (deckDraft) {
+    const topTask = activeTasks()[0];
+    const topCard = $('#deck').querySelector('.card.is-top');
+    if (topTask && topTask.id === deckDraft.id && topCard) {
+      openCardEdit(topCard, topTask, deckDraft);
+    } else {
+      state.editingCard = false;
+      const stillThere = state.tasks.find((t) => t.id === deckDraft.id);
+      orphanDraft(deckDraft, 'deck', stillThere
+        ? 'The card is no longer on top of the deck.'
+        : 'The card is no longer in the deck.');
+    }
+  }
 }
 
 // Loop 19: a tab left open in the background re-syncs when it becomes visible
